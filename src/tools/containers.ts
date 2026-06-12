@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ok, fail, type ToolContext } from "./util.js";
-import { assertSafeCliValue } from "../safety.js";
+import { assertSafeCliValue, ensureWritable, validateHostPath } from "../safety.js";
+import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
 export function registerContainerTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -41,6 +42,65 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const res = await ctx.run(["logs", safeId]);
         const lines = res.stdout.replace(/\n$/, "").split("\n");
         return ok(lines.slice(-(tail ?? 100)).join("\n"));
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    "run_container",
+    {
+      title: "Run container",
+      description:
+        "Run a container in the background inside its own lightweight VM and return its ID. " +
+        "Mount sources must be inside the allowed host paths. " +
+        "Default CPU/memory limits are applied unless overridden.",
+      inputSchema: {
+        image: z.string().describe("Image reference, e.g. alpine:latest"),
+        name: z.string().optional().describe("Optional container name"),
+        command: z.array(z.string()).optional().describe("Command and arguments to run"),
+        mounts: z
+          .array(
+            z.object({
+              source: z.string().describe("Host path (must be inside an allowed root)"),
+              destination: z.string().describe("Path inside the container"),
+              readonly: z.boolean().optional(),
+            })
+          )
+          .optional(),
+        cpus: z.string().optional().describe("CPU limit, e.g. '4'"),
+        memory: z.string().optional().describe("Memory limit, e.g. '4g'"),
+        env: z.record(z.string()).optional().describe("Environment variables"),
+      },
+    },
+    async ({ image, name, command, mounts, cpus, memory, env }) => {
+      try {
+        ensureWritable(ctx.config, "run_container");
+        const safeImage = assertSafeCliValue(image, "image reference");
+        const args = [
+          "run",
+          "--detach",
+          "--cpus",
+          cpus ?? ctx.config.defaultCpus,
+          "--memory",
+          memory ?? ctx.config.defaultMemory,
+          "--label",
+          MANAGED_LABEL,
+          "--label",
+          `${AGENT_LABEL_KEY}=${ctx.config.agentName}`,
+        ];
+        if (name) args.push("--name", assertSafeCliValue(name, "container name"));
+        for (const m of mounts ?? []) {
+          const source = validateHostPath(m.source, ctx.config);
+          args.push("--volume", `${source}:${m.destination}${m.readonly ? ":ro" : ""}`);
+        }
+        for (const [key, value] of Object.entries(env ?? {})) {
+          args.push("--env", `${key}=${value}`);
+        }
+        args.push(safeImage, ...(command ?? []));
+        const res = await ctx.run(args);
+        return ok(res.stdout.trim());
       } catch (err) {
         return fail(err);
       }
