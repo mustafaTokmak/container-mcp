@@ -23,6 +23,18 @@ function canonicalize(p: string): string {
   }
 }
 
+/**
+ * User-supplied values that become CLI arguments must not be mistakable
+ * for flags. execFile prevents shell injection, but a value like "--help"
+ * would still be parsed as an option by the container CLI.
+ */
+export function assertSafeCliValue(value: string, label: string): string {
+  if (value.startsWith("-")) {
+    throw new SafetyError(`Invalid ${label}: ${JSON.stringify(value)} (must not start with "-")`);
+  }
+  return value;
+}
+
 export function validateHostPath(p: string, config: Config): string {
   const resolved = canonicalize(path.resolve(p));
   const allowed = config.allowedMounts.some((entry) => {

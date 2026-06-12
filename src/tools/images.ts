@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ok, fail, type ToolContext } from "./util.js";
-import { ensureWritable, validateHostPath } from "../safety.js";
+import { ensureWritable, validateHostPath, assertSafeCliValue } from "../safety.js";
 
 export function registerImageTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -32,8 +32,9 @@ export function registerImageTools(server: McpServer, ctx: ToolContext): void {
     async ({ reference }) => {
       try {
         ensureWritable(ctx.config, "pull_image");
-        const res = await ctx.run(["images", "pull", reference]);
-        return ok(res.stdout.trim() || `pulled ${reference}`);
+        const ref = assertSafeCliValue(reference, "image reference");
+        const res = await ctx.run(["images", "pull", ref]);
+        return ok(res.stdout.trim() || `pulled ${ref}`);
       } catch (err) {
         return fail(err);
       }
@@ -56,13 +57,14 @@ export function registerImageTools(server: McpServer, ctx: ToolContext): void {
       try {
         ensureWritable(ctx.config, "build_image");
         const contextPath = validateHostPath(context, ctx.config);
-        const args = ["build", "--tag", tag];
+        const safeTag = assertSafeCliValue(tag, "image tag");
+        const args = ["build", "--tag", safeTag];
         if (dockerfile) {
           args.push("--file", validateHostPath(dockerfile, ctx.config));
         }
         args.push(contextPath);
         const res = await ctx.run(args);
-        return ok(res.stdout.trim() || `built ${tag}`);
+        return ok(res.stdout.trim() || `built ${safeTag}`);
       } catch (err) {
         return fail(err);
       }

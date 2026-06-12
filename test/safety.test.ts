@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { validateHostPath, ensureWritable, SafetyError } from "../src/safety.js";
+import { validateHostPath, ensureWritable, assertSafeCliValue, SafetyError } from "../src/safety.js";
 import type { Config } from "../src/config.js";
 
 const cfg: Config = {
@@ -72,6 +72,17 @@ describe("validateHostPath", () => {
     } finally {
       fs.rmSync(real, { recursive: true, force: true });
     }
+  });
+});
+
+describe("assertSafeCliValue", () => {
+  test("accepts normal values", () => {
+    expect(assertSafeCliValue("alpine:latest", "image reference")).toBe("alpine:latest");
+  });
+
+  test("rejects values starting with a dash", () => {
+    expect(() => assertSafeCliValue("--help", "image reference")).toThrow(SafetyError);
+    expect(() => assertSafeCliValue("-x", "image reference")).toThrow(/image reference/);
   });
 });
 

@@ -43,6 +43,16 @@ describe("pull_image", () => {
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/Read-only/);
   });
+
+  test("rejects a reference that looks like a flag", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "pull_image",
+      arguments: { reference: "--help" },
+    });
+    expect(res.isError).toBe(true);
+    expect(runner.calls.length).toBe(0);
+  });
 });
 
 describe("build_image", () => {
@@ -72,6 +82,17 @@ describe("build_image", () => {
     const res: any = await client.callTool({
       name: "build_image",
       arguments: { context: "/etc", tag: "evil:1" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/not allowed/);
+    expect(runner.calls.length).toBe(0);
+  });
+
+  test("rejects dockerfile outside allowed roots even if context is valid", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "build_image",
+      arguments: { context: "/Users/me/proj/app", tag: "t:1", dockerfile: "/etc/Dockerfile" },
     });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/not allowed/);
