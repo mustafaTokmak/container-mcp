@@ -19,7 +19,7 @@ describe("list_images", () => {
     const { runner, client } = await setup([{ stdout: '[{"name":"alpine"}]', stderr: "" }]);
     const res = await client.callTool({ name: "list_images", arguments: {} });
     expect(textOf(res)).toBe('[{"name":"alpine"}]');
-    expect(runner.calls[0]).toEqual(["images", "list", "--format", "json"]);
+    expect(runner.calls[0]).toEqual(["image", "list", "--format", "json"]);
   });
 });
 
@@ -31,7 +31,7 @@ describe("pull_image", () => {
       arguments: { reference: "alpine:latest" },
     });
     expect(textOf(res)).toBe("done");
-    expect(runner.calls[0]).toEqual(["images", "pull", "alpine:latest"]);
+    expect(runner.calls[0]).toEqual(["image", "pull", "alpine:latest"]);
   });
 
   test("blocked in read-only mode", async () => {

@@ -14,7 +14,7 @@ export function registerImageTools(server: McpServer, ctx: ToolContext): void {
     },
     async () => {
       try {
-        const res = await ctx.run(["images", "list", "--format", "json"]);
+        const res = await ctx.run(["image", "list", "--format", "json"]);
         return ok(res.stdout.trim() || "[]");
       } catch (err) {
         return fail(err);
@@ -33,7 +33,7 @@ export function registerImageTools(server: McpServer, ctx: ToolContext): void {
       try {
         ensureWritable(ctx.config, "pull_image");
         const ref = assertSafeCliValue(reference, "image reference");
-        const res = await ctx.run(["images", "pull", ref]);
+        const res = await ctx.run(["image", "pull", ref]);
         return ok(res.stdout.trim() || `pulled ${ref}`);
       } catch (err) {
         return fail(err);
