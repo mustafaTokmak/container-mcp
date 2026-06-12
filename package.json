@@ -1,6 +1,6 @@
 {
   "name": "container-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for Apple containers - run AI agents in VM-isolated sandboxes on your Mac",
   "type": "module",
   "bin": { "container-mcp": "dist/index.js" },
@@ -9,8 +9,20 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mustafaTokmak/container-mcp.git"
+  },
+  "homepage": "https://github.com/mustafaTokmak/container-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/mustafaTokmak/container-mcp/issues"
+  },
+  "keywords": ["mcp", "mcp-server", "apple-container", "sandbox", "ai-agents", "macos", "vm", "containers"],
+  "author": "Mustafa Tokmak",
+  "os": ["darwin"],
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

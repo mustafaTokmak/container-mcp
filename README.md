@@ -19,7 +19,7 @@ boundary for code an AI agent wrote five seconds ago.
 
 ## Install
 
-Requires an Apple silicon Mac, macOS 26+, and the
+Requires an Apple silicon Mac, macOS 26 or newer, and the
 [container CLI](https://github.com/apple/container/releases).
 
 ```bash
@@ -40,7 +40,7 @@ Or in any MCP client config:
 
 | Tool | Description |
 |---|---|
-| `run_container` | Run an image in its own VM (detached, labeled, resource-limited) |
+| `run_container` | Run an image in its own VM (labeled, resource-limited; `wait: true` runs to completion and returns output) |
 | `exec_in_container` | Run a command in a running container |
 | `list_containers` / `container_logs` | Inspect state and output |
 | `stop_container` / `remove_container` | Lifecycle |
@@ -52,16 +52,24 @@ Or in any MCP client config:
 
 | Env var | Default | Effect |
 |---|---|---|
-| `CONTAINER_MCP_ALLOWED_MOUNTS` | launch dir + temp | Colon-separated allowlist of host paths agents may mount, copy to/from, or build from. Setting it replaces the default. |
+| `CONTAINER_MCP_ALLOWED_MOUNTS` | launch dir + private scratch dir | Colon-separated allowlist of host paths agents may mount, copy to/from, or build from. Setting it replaces the default. |
 | `CONTAINER_MCP_READONLY` | off | `1`/`true`: only listing, logs, and status work |
 | `CONTAINER_MCP_DEFAULT_CPUS` | `2` | CPU limit applied when the agent does not specify one |
 | `CONTAINER_MCP_DEFAULT_MEMORY` | `2g` | Memory limit applied when the agent does not specify one |
 | `CONTAINER_MCP_AGENT_NAME` | `agent` | Value of the `dev.container-mcp.agent` label on created containers |
+| `CONTAINER_MCP_TIMEOUT_MS` | `120000` | Base CLI timeout in ms. Image pulls/builds and wait-mode runs get 600000 automatically. |
+| `CONTAINER_MCP_MAX_CONTAINERS` | `10` | Maximum concurrent containers run_container will create |
+| `CONTAINER_MCP_ALLOW_UNMANAGED` | off | `1`/`true`: allow operating on containers not created by this server |
 
-Mount sources are canonicalized (symlinks resolved) before allowlist checks, and
-every agent-supplied value that reaches the CLI is guarded against flag
-injection. Commands are executed with `execFile` (no shell), so there is no
-shell injection surface.
+Mount sources, build contexts, and dockerfiles must exist and are fully
+canonicalized (symlinks resolved) before allowlist checks — a path cannot be
+swapped for a symlink after validation. A launch directory of `/` or your home
+directory is never used as an implicit allowlist root. Lifecycle tools
+(stop, remove, exec, logs, copy) only operate on containers this server
+created (tagged `dev.container-mcp.managed=true`) unless
+`CONTAINER_MCP_ALLOW_UNMANAGED` is set. Every agent-supplied value that
+reaches the CLI is guarded against flag injection, and commands are executed
+with `execFile` (no shell), so there is no shell injection surface.
 
 ## Known assumptions
 
@@ -70,7 +78,8 @@ Built against apple/container docs without a live CLI on the dev machine:
 - `container exec` is invoked with a `--` terminator before the agent's command
   (standard swift-argument-parser convention, not explicitly documented).
 - `container cp` is used (documented alias of the canonical `container copy`).
-- Log tailing slices in-process rather than using the CLI's `-n` flag.
+- `container inspect` label layout is undocumented; managed-label checks parse it
+  tolerantly and fail closed (override: `CONTAINER_MCP_ALLOW_UNMANAGED`).
 
 ## License
 

@@ -5,8 +5,10 @@ import type { ToolContext } from "./tools/util.js";
 import { registerContainerTools } from "./tools/containers.js";
 import { registerImageTools } from "./tools/images.js";
 import { registerSystemTools } from "./tools/system.js";
+import { createRequire } from "node:module";
 
-export const VERSION = "0.1.0";
+const pkg = createRequire(import.meta.url)("../package.json") as { version: string };
+export const VERSION: string = pkg.version;
 
 export function createServer(overrides: Partial<ToolContext> = {}): McpServer {
   const ctx: ToolContext = {

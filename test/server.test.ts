@@ -1,8 +1,14 @@
 import { describe, test, expect } from "vitest";
-import { createServer } from "../src/server.js";
+import { createServer, VERSION } from "../src/server.js";
 import { makeConfig, makeFakeRunner, connect } from "./helpers.js";
+import { createRequire } from "node:module";
 
 describe("createServer", () => {
+  test("VERSION tracks package.json", () => {
+    const pkg = createRequire(import.meta.url)("../package.json");
+    expect(VERSION).toBe(pkg.version);
+  });
+
   test("registers all 11 tools", async () => {
     const runner = makeFakeRunner();
     const client = await connect(createServer({ run: runner.run, config: makeConfig() }));
