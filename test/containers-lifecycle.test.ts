@@ -53,7 +53,7 @@ describe("exec_in_container", () => {
       arguments: { id: "abc", command: ["echo", "hi"] },
     });
     expect(textOf(res)).toBe("hi");
-    expect(runner.calls[0]).toEqual(["exec", "abc", "echo", "hi"]);
+    expect(runner.calls[0]).toEqual(["exec", "abc", "--", "echo", "hi"]);
   });
 
   test("blocked in read-only mode", async () => {

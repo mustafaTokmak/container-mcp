@@ -4,6 +4,8 @@ import { ok, fail, type ToolContext } from "./util.js";
 import { assertSafeCliValue, ensureWritable, validateHostPath, SafetyError } from "../safety.js";
 import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
+const isContainerPath = (p: string) => /^[^/:]+:/.test(p);
+
 export function registerContainerTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "list_containers",
@@ -177,15 +179,13 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       try {
         ensureWritable(ctx.config, "exec_in_container");
         const safeId = assertSafeCliValue(id, "container id");
-        const res = await ctx.run(["exec", safeId, ...command]);
+        const res = await ctx.run(["exec", safeId, "--", ...command]);
         return ok(res.stdout.trim());
       } catch (err) {
         return fail(err);
       }
     }
   );
-
-  const isContainerPath = (p: string) => /^[^/:]+:/.test(p);
 
   server.registerTool(
     "copy_files",
@@ -198,6 +198,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         source: z.string().describe("Source path (host path or <id>:<path>)"),
         destination: z.string().describe("Destination path (host path or <id>:<path>)"),
       },
+      annotations: { destructiveHint: true },
     },
     async ({ source, destination }) => {
       try {
