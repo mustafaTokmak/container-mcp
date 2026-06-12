@@ -2,7 +2,7 @@ import { describe, test, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { validateHostPath, ensureWritable, assertSafeCliValue, SafetyError } from "../src/safety.js";
+import { validateHostPath, validateExistingHostPath, ensureWritable, assertSafeCliValue, SafetyError } from "../src/safety.js";
 import type { Config } from "../src/config.js";
 
 const cfg: Config = {
@@ -69,6 +69,36 @@ describe("validateHostPath", () => {
     try {
       // validate the same dir addressed through its canonical path
       expect(validateHostPath(real, symCfg)).toBe(real);
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("validateExistingHostPath", () => {
+  test("rejects a path that does not exist", () => {
+    expect(() => validateExistingHostPath("/Users/me/proj/ghost", cfg)).toThrow(/does not exist/);
+  });
+
+  test("resolves and accepts an existing path under an allowed root", () => {
+    const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "safety-")));
+    const sub = path.join(real, "sub");
+    fs.mkdirSync(sub);
+    const symCfg = { ...cfg, allowedMounts: [real] };
+    try {
+      expect(validateExistingHostPath(sub, symCfg)).toBe(sub);
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  test("follows a symlink and rejects when the target escapes", () => {
+    const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "safety-")));
+    const link = path.join(real, "link");
+    fs.symlinkSync("/etc", link);
+    const symCfg = { ...cfg, allowedMounts: [real] };
+    try {
+      expect(() => validateExistingHostPath(link, symCfg)).toThrow(SafetyError);
     } finally {
       fs.rmSync(real, { recursive: true, force: true });
     }

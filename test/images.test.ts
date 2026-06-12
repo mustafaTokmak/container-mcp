@@ -1,4 +1,7 @@
 import { describe, test, expect } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { registerImageTools } from "../src/tools/images.js";
 import { makeConfig, makeFakeRunner, makeServer, connect } from "./helpers.js";
 
@@ -57,24 +60,36 @@ describe("pull_image", () => {
 
 describe("build_image", () => {
   test("builds with tag, validated context, and optional dockerfile", async () => {
-    const { runner, client } = await setup([{ stdout: "built", stderr: "" }]);
-    const res = await client.callTool({
-      name: "build_image",
-      arguments: {
-        context: "/Users/me/proj/app",
-        tag: "myapp:dev",
-        dockerfile: "/Users/me/proj/app/Dockerfile",
-      },
-    });
-    expect(textOf(res)).toBe("built");
-    expect(runner.calls[0]).toEqual([
-      "build",
-      "--tag",
-      "myapp:dev",
-      "--file",
-      "/Users/me/proj/app/Dockerfile",
-      "/Users/me/proj/app",
-    ]);
+    // Context and dockerfile must exist for validateExistingHostPath.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmcp-build-")));
+    const contextDir = path.join(root, "app");
+    fs.mkdirSync(contextDir);
+    const dockerfile = path.join(contextDir, "Dockerfile");
+    fs.writeFileSync(dockerfile, "FROM scratch\n");
+    try {
+      const { runner, client } = await setup([{ stdout: "built", stderr: "" }], {
+        allowedMounts: [root],
+      });
+      const res = await client.callTool({
+        name: "build_image",
+        arguments: {
+          context: contextDir,
+          tag: "myapp:dev",
+          dockerfile,
+        },
+      });
+      expect(textOf(res)).toBe("built");
+      expect(runner.calls[0]).toEqual([
+        "build",
+        "--tag",
+        "myapp:dev",
+        "--file",
+        dockerfile,
+        contextDir,
+      ]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects a build context outside allowed roots", async () => {
@@ -89,13 +104,22 @@ describe("build_image", () => {
   });
 
   test("rejects dockerfile outside allowed roots even if context is valid", async () => {
-    const { runner, client } = await setup();
-    const res: any = await client.callTool({
-      name: "build_image",
-      arguments: { context: "/Users/me/proj/app", tag: "t:1", dockerfile: "/etc/Dockerfile" },
-    });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/not allowed/);
-    expect(runner.calls.length).toBe(0);
+    // Context must exist and be allowed; dockerfile must exist but be outside the allowlist.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmcp-df-")));
+    const contextDir = path.join(root, "app");
+    fs.mkdirSync(contextDir);
+    try {
+      const { runner, client } = await setup([], { allowedMounts: [root] });
+      const res: any = await client.callTool({
+        name: "build_image",
+        // /etc/hosts is a real file on macOS/Linux, outside our root
+        arguments: { context: contextDir, tag: "t:1", dockerfile: "/etc/hosts" },
+      });
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toMatch(/not allowed/);
+      expect(runner.calls.length).toBe(0);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

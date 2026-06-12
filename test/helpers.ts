@@ -7,6 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 export function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     allowedMounts: ["/Users/me/proj", "/tmp"],
+    scratchDir: "/tmp",
     readOnly: false,
     defaultCpus: "2",
     defaultMemory: "2g",

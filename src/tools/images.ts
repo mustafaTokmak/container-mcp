@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ok, fail, type ToolContext } from "./util.js";
-import { ensureWritable, validateHostPath, assertSafeCliValue } from "../safety.js";
+import { ensureWritable, validateHostPath, validateExistingHostPath, assertSafeCliValue } from "../safety.js";
 
 export function registerImageTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -56,11 +56,11 @@ export function registerImageTools(server: McpServer, ctx: ToolContext): void {
     async ({ context, tag, dockerfile }) => {
       try {
         ensureWritable(ctx.config, "build_image");
-        const contextPath = validateHostPath(context, ctx.config);
+        const contextPath = validateExistingHostPath(context, ctx.config);
         const safeTag = assertSafeCliValue(tag, "image tag");
         const args = ["build", "--tag", safeTag];
         if (dockerfile) {
-          args.push("--file", validateHostPath(dockerfile, ctx.config));
+          args.push("--file", validateExistingHostPath(dockerfile, ctx.config));
         }
         args.push(contextPath);
         const res = await ctx.run(args);

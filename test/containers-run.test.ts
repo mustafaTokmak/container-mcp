@@ -1,4 +1,7 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { registerContainerTools } from "../src/tools/containers.js";
 import { makeConfig, makeFakeRunner, makeServer, connect } from "./helpers.js";
 
@@ -61,20 +64,32 @@ describe("run_container", () => {
   });
 
   test("mounts an allowed path, optionally read-only", async () => {
-    const { runner, client } = await setup([{ stdout: "id2", stderr: "" }]);
-    await client.callTool({
-      name: "run_container",
-      arguments: {
-        image: "alpine",
-        mounts: [
-          { source: "/Users/me/proj/src", destination: "/work" },
-          { source: "/tmp/cache", destination: "/cache", readonly: true },
-        ],
-      },
-    });
-    const args = runner.calls[0];
-    const volumes = args.filter((_, i) => args[i - 1] === "--volume");
-    expect(volumes).toEqual(["/Users/me/proj/src:/work", "/private/tmp/cache:/cache:ro"]);
+    // Create real temp dirs so validateExistingHostPath can resolve them.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmcp-run-")));
+    const src = path.join(root, "src");
+    const cache = path.join(root, "cache");
+    fs.mkdirSync(src);
+    fs.mkdirSync(cache);
+    try {
+      const { runner, client } = await setup([{ stdout: "id2", stderr: "" }], {
+        allowedMounts: [root],
+      });
+      await client.callTool({
+        name: "run_container",
+        arguments: {
+          image: "alpine",
+          mounts: [
+            { source: src, destination: "/work" },
+            { source: cache, destination: "/cache", readonly: true },
+          ],
+        },
+      });
+      const args = runner.calls[0];
+      const volumes = args.filter((_, i) => args[i - 1] === "--volume");
+      expect(volumes).toEqual([`${src}:/work`, `${cache}:/cache:ro`]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects a mount outside the allowlist without calling the CLI", async () => {
@@ -123,17 +138,25 @@ describe("run_container", () => {
   });
 
   test("rejects a mount destination containing a colon", async () => {
-    const { runner, client } = await setup();
-    const res: any = await client.callTool({
-      name: "run_container",
-      arguments: {
-        image: "alpine",
-        mounts: [{ source: "/Users/me/proj/src", destination: "/x:/y" }],
-      },
-    });
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toMatch(/Invalid mount destination/);
-    expect(runner.calls.length).toBe(0);
+    // Source must exist so validateExistingHostPath passes; the destination check fires next.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmcp-dest-")));
+    const src = path.join(root, "src");
+    fs.mkdirSync(src);
+    try {
+      const { runner, client } = await setup([], { allowedMounts: [root] });
+      const res: any = await client.callTool({
+        name: "run_container",
+        arguments: {
+          image: "alpine",
+          mounts: [{ source: src, destination: "/x:/y" }],
+        },
+      });
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toMatch(/Invalid mount destination/);
+      expect(runner.calls.length).toBe(0);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects an env variable name containing '='", async () => {

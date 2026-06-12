@@ -1,4 +1,7 @@
 import { describe, test, expect } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { registerContainerTools } from "../src/tools/containers.js";
 import { makeConfig, makeFakeRunner, makeServer, connect } from "./helpers.js";
 
@@ -68,12 +71,22 @@ describe("exec_in_container", () => {
 
 describe("copy_files", () => {
   test("copies host file into container, validating the host side", async () => {
-    const { runner, client } = await setup([{ stdout: "", stderr: "" }]);
-    await client.callTool({
-      name: "copy_files",
-      arguments: { source: "/Users/me/proj/a.txt", destination: "abc:/work/a.txt" },
-    });
-    expect(runner.calls[0]).toEqual(["cp", "/Users/me/proj/a.txt", "abc:/work/a.txt"]);
+    // Source must be a real, existing host file for validateExistingHostPath.
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmcp-cp-")));
+    const srcFile = path.join(root, "a.txt");
+    fs.writeFileSync(srcFile, "data");
+    try {
+      const { runner, client } = await setup([{ stdout: "", stderr: "" }], {
+        allowedMounts: [root],
+      });
+      await client.callTool({
+        name: "copy_files",
+        arguments: { source: srcFile, destination: "abc:/work/a.txt" },
+      });
+      expect(runner.calls[0]).toEqual(["cp", srcFile, "abc:/work/a.txt"]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects a host destination outside allowed roots", async () => {

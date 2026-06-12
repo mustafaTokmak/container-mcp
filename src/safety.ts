@@ -50,6 +50,27 @@ export function validateHostPath(p: string, config: Config): string {
   return resolved;
 }
 
+/**
+ * Like validateHostPath, but the path must already exist: the full
+ * realpath (no non-existent-tail fallback) is what gets checked and
+ * returned. Use for anything the container CLI will dereference later
+ * (mount sources, build contexts, dockerfiles) so a symlink cannot be
+ * swapped in after validation.
+ */
+export function validateExistingHostPath(p: string, config: Config): string {
+  const resolved = path.resolve(p);
+  let real: string;
+  try {
+    real = fs.realpathSync(resolved);
+  } catch {
+    throw new SafetyError(
+      `Host path does not exist: ${resolved}. ` +
+        `Mount sources, build contexts, and dockerfiles must exist before use.`
+    );
+  }
+  return validateHostPath(real, config);
+}
+
 export function ensureWritable(config: Config, action: string): void {
   if (config.readOnly) {
     throw new SafetyError(

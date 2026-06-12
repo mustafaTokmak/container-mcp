@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ok, fail, type ToolContext } from "./util.js";
-import { assertSafeCliValue, ensureWritable, validateHostPath, SafetyError } from "../safety.js";
+import { assertSafeCliValue, ensureWritable, validateHostPath, validateExistingHostPath, SafetyError } from "../safety.js";
 import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
 const isContainerPath = (p: string) => /^[^/:]+:/.test(p);
@@ -102,7 +102,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           if (!m.destination.startsWith("/") || m.destination.includes(":")) {
             throw new SafetyError(`Invalid mount destination: ${JSON.stringify(m.destination)}`);
           }
-          const source = validateHostPath(m.source, ctx.config);
+          const source = validateExistingHostPath(m.source, ctx.config);
           args.push("--volume", `${source}:${m.destination}${m.readonly ? ":ro" : ""}`);
         }
         for (const [key, value] of Object.entries(env ?? {})) {
@@ -205,7 +205,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         ensureWritable(ctx.config, "copy_files");
         const src = isContainerPath(source)
           ? assertSafeCliValue(source, "source path")
-          : validateHostPath(source, ctx.config);
+          : validateExistingHostPath(source, ctx.config);
         const dst = isContainerPath(destination)
           ? assertSafeCliValue(destination, "destination path")
           : validateHostPath(destination, ctx.config);
