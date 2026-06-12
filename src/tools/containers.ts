@@ -117,4 +117,102 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       }
     }
   );
+
+  server.registerTool(
+    "stop_container",
+    {
+      title: "Stop container",
+      description: "Stop a running container.",
+      inputSchema: { id: z.string().describe("Container ID or name") },
+    },
+    async ({ id }) => {
+      try {
+        ensureWritable(ctx.config, "stop_container");
+        const safeId = assertSafeCliValue(id, "container id");
+        await ctx.run(["stop", safeId]);
+        return ok(`stopped ${safeId}`);
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    "remove_container",
+    {
+      title: "Remove container",
+      description: "Delete a container. Pass force: true to delete a running container.",
+      inputSchema: {
+        id: z.string().describe("Container ID or name"),
+        force: z.boolean().optional().describe("Force-delete even if running"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ id, force }) => {
+      try {
+        ensureWritable(ctx.config, "remove_container");
+        const safeId = assertSafeCliValue(id, "container id");
+        const args = ["delete"];
+        if (force) args.push("--force");
+        args.push(safeId);
+        await ctx.run(args);
+        return ok(`removed ${safeId}`);
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    "exec_in_container",
+    {
+      title: "Execute in container",
+      description: "Run a command inside a running container and return its output.",
+      inputSchema: {
+        id: z.string().describe("Container ID or name"),
+        command: z.array(z.string()).min(1).describe("Command and arguments"),
+      },
+    },
+    async ({ id, command }) => {
+      try {
+        ensureWritable(ctx.config, "exec_in_container");
+        const safeId = assertSafeCliValue(id, "container id");
+        const res = await ctx.run(["exec", safeId, ...command]);
+        return ok(res.stdout.trim());
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  const isContainerPath = (p: string) => /^[^/:]+:/.test(p);
+
+  server.registerTool(
+    "copy_files",
+    {
+      title: "Copy files",
+      description:
+        "Copy files between host and container. Container paths use '<id>:<path>'. " +
+        "Host paths must be inside the allowed roots.",
+      inputSchema: {
+        source: z.string().describe("Source path (host path or <id>:<path>)"),
+        destination: z.string().describe("Destination path (host path or <id>:<path>)"),
+      },
+    },
+    async ({ source, destination }) => {
+      try {
+        ensureWritable(ctx.config, "copy_files");
+        const src = isContainerPath(source)
+          ? assertSafeCliValue(source, "source path")
+          : validateHostPath(source, ctx.config);
+        const dst = isContainerPath(destination)
+          ? assertSafeCliValue(destination, "destination path")
+          : validateHostPath(destination, ctx.config);
+        await ctx.run(["cp", src, dst]);
+        return ok(`copied ${source} -> ${destination}`);
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
 }
