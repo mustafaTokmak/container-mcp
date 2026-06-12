@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { registerContainerTools } from "../src/tools/containers.js";
-import { makeConfig, makeFakeRunner, makeServer, connect } from "./helpers.js";
+import { makeConfig, makeFakeRunner, makeServer, connect, MANAGED_INSPECT } from "./helpers.js";
 
 function textOf(res: any): string {
   return res.content[0].text;
@@ -32,21 +32,23 @@ describe("list_containers", () => {
 describe("container_logs", () => {
   test("returns the last 100 lines by default via CLI -n flag", async () => {
     const lines = "line 1\nline 2\nline 3";
-    const { runner, client } = await setup([{ stdout: lines, stderr: "" }]);
+    const { runner, client } = await setup([MANAGED_INSPECT, { stdout: lines, stderr: "" }]);
     const res = await client.callTool({ name: "container_logs", arguments: { id: "abc" } });
     expect(textOf(res)).toBe("line 1\nline 2\nline 3");
-    expect(runner.calls[0]).toEqual(["logs", "-n", "100", "abc"]);
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+    expect(runner.calls[1]).toEqual(["logs", "-n", "100", "abc"]);
   });
 
   test("respects a custom tail count via CLI -n flag", async () => {
     const lines = "a\nb\nc\nd";
-    const { runner, client } = await setup([{ stdout: lines, stderr: "" }]);
+    const { runner, client } = await setup([MANAGED_INSPECT, { stdout: lines, stderr: "" }]);
     const res = await client.callTool({
       name: "container_logs",
       arguments: { id: "abc", tail: 2 },
     });
     expect(textOf(res)).toBe("a\nb\nc\nd");
-    expect(runner.calls[0]).toEqual(["logs", "-n", "2", "abc"]);
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+    expect(runner.calls[1]).toEqual(["logs", "-n", "2", "abc"]);
   });
 
   test("rejects an id that looks like a flag", async () => {

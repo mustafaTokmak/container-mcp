@@ -99,4 +99,16 @@ describe("loadConfig", () => {
     const cfg2 = loadConfigWithCleanup({ CONTAINER_MCP_MAX_CONTAINERS: "-3" }, "/x");
     expect(cfg2.maxContainers).toBe(10);
   });
+
+  test("allowUnmanaged defaults to false", () => {
+    const cfg = loadConfigWithCleanup({}, "/x");
+    expect(cfg.allowUnmanaged).toBe(false);
+  });
+
+  test("allowUnmanaged accepts 1 and TRUE", () => {
+    const cfg1 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_UNMANAGED: "1" }, "/x");
+    expect(cfg1.allowUnmanaged).toBe(true);
+    const cfg2 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_UNMANAGED: "TRUE" }, "/x");
+    expect(cfg2.allowUnmanaged).toBe(true);
+  });
 });

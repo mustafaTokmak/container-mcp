@@ -6,6 +6,41 @@ import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
 const isContainerPath = (p: string) => /^[^/:]+:/.test(p);
 
+/**
+ * The inspect JSON layout is not documented upstream; look for labels in
+ * the shapes we know about and fail closed (with an operator escape
+ * hatch) when none can be found.
+ */
+async function ensureManaged(ctx: ToolContext, id: string): Promise<void> {
+  if (ctx.config.allowUnmanaged) return;
+  let labels: Record<string, string> | undefined;
+  try {
+    const res = await ctx.run(["inspect", id]);
+    const parsed = JSON.parse(res.stdout);
+    const node = Array.isArray(parsed) ? parsed[0] : parsed;
+    const raw = node?.configuration?.labels ?? node?.labels;
+    if (Array.isArray(raw)) {
+      labels = Object.fromEntries(
+        raw.filter((e: unknown) => typeof e === "string").map((e: string) => {
+          const i = e.indexOf("=");
+          return i === -1 ? [e, ""] : [e.slice(0, i), e.slice(i + 1)];
+        })
+      );
+    } else if (raw && typeof raw === "object") {
+      labels = raw as Record<string, string>;
+    }
+  } catch {
+    labels = undefined;
+  }
+  const [key, value] = MANAGED_LABEL.split("=");
+  if (labels?.[key] !== value) {
+    throw new SafetyError(
+      `Container ${id} is not managed by container-mcp (missing ${MANAGED_LABEL} label). ` +
+        `Set CONTAINER_MCP_ALLOW_UNMANAGED=1 to operate on containers created outside this server.`
+    );
+  }
+}
+
 export function registerContainerTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     "list_containers",
@@ -41,6 +76,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
     async ({ id, tail }) => {
       try {
         const safeId = assertSafeCliValue(id, "container id");
+        await ensureManaged(ctx, safeId);
         const res = await ctx.run(["logs", "-n", String(tail ?? 100), safeId]);
         return ok(res.stdout.trimEnd());
       } catch (err) {
@@ -153,6 +189,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       try {
         ensureWritable(ctx.config, "stop_container");
         const safeId = assertSafeCliValue(id, "container id");
+        await ensureManaged(ctx, safeId);
         await ctx.run(["stop", safeId]);
         return ok(`stopped ${safeId}`);
       } catch (err) {
@@ -176,6 +213,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       try {
         ensureWritable(ctx.config, "remove_container");
         const safeId = assertSafeCliValue(id, "container id");
+        await ensureManaged(ctx, safeId);
         const args = ["delete"];
         if (force) args.push("--force");
         args.push(safeId);
@@ -201,6 +239,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       try {
         ensureWritable(ctx.config, "exec_in_container");
         const safeId = assertSafeCliValue(id, "container id");
+        await ensureManaged(ctx, safeId);
         const res = await ctx.run(["exec", safeId, "--", ...command]);
         return ok(res.stdout.trim());
       } catch (err) {
@@ -231,6 +270,14 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const dst = isContainerPath(destination)
           ? assertSafeCliValue(destination, "destination path")
           : validateHostPath(destination, ctx.config);
+        if (isContainerPath(source)) {
+          const containerId = src.slice(0, src.indexOf(":"));
+          await ensureManaged(ctx, containerId);
+        }
+        if (isContainerPath(destination)) {
+          const containerId = dst.slice(0, dst.indexOf(":"));
+          await ensureManaged(ctx, containerId);
+        }
         await ctx.run(["cp", src, dst]);
         return ok(`copied ${source} -> ${destination}`);
       } catch (err) {

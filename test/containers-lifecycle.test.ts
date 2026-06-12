@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { registerContainerTools } from "../src/tools/containers.js";
-import { makeConfig, makeFakeRunner, makeServer, connect } from "./helpers.js";
+import { makeConfig, makeFakeRunner, makeServer, connect, MANAGED_INSPECT, UNMANAGED_INSPECT } from "./helpers.js";
 
 function textOf(res: any): string {
   return res.content[0].text;
@@ -19,10 +19,11 @@ async function setup(results: any[] = [], cfgOverrides = {}) {
 
 describe("stop_container", () => {
   test("stops by id", async () => {
-    const { runner, client } = await setup([{ stdout: "", stderr: "" }]);
+    const { runner, client } = await setup([MANAGED_INSPECT, { stdout: "", stderr: "" }]);
     const res = await client.callTool({ name: "stop_container", arguments: { id: "abc" } });
     expect(textOf(res)).toMatch(/stopped abc/);
-    expect(runner.calls[0]).toEqual(["stop", "abc"]);
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+    expect(runner.calls[1]).toEqual(["stop", "abc"]);
   });
 
   test("rejects a flag-like id", async () => {
@@ -35,9 +36,10 @@ describe("stop_container", () => {
 
 describe("remove_container", () => {
   test("deletes by id, with force flag", async () => {
-    const { runner, client } = await setup([{ stdout: "", stderr: "" }]);
+    const { runner, client } = await setup([MANAGED_INSPECT, { stdout: "", stderr: "" }]);
     await client.callTool({ name: "remove_container", arguments: { id: "abc", force: true } });
-    expect(runner.calls[0]).toEqual(["delete", "--force", "abc"]);
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+    expect(runner.calls[1]).toEqual(["delete", "--force", "abc"]);
   });
 
   test("is annotated destructive", async () => {
@@ -50,13 +52,14 @@ describe("remove_container", () => {
 
 describe("exec_in_container", () => {
   test("execs a command vector", async () => {
-    const { runner, client } = await setup([{ stdout: "hi\n", stderr: "" }]);
+    const { runner, client } = await setup([MANAGED_INSPECT, { stdout: "hi\n", stderr: "" }]);
     const res = await client.callTool({
       name: "exec_in_container",
       arguments: { id: "abc", command: ["echo", "hi"] },
     });
     expect(textOf(res)).toBe("hi");
-    expect(runner.calls[0]).toEqual(["exec", "abc", "--", "echo", "hi"]);
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+    expect(runner.calls[1]).toEqual(["exec", "abc", "--", "echo", "hi"]);
   });
 
   test("blocked in read-only mode", async () => {
@@ -76,14 +79,15 @@ describe("copy_files", () => {
     const srcFile = path.join(root, "a.txt");
     fs.writeFileSync(srcFile, "data");
     try {
-      const { runner, client } = await setup([{ stdout: "", stderr: "" }], {
+      const { runner, client } = await setup([MANAGED_INSPECT, { stdout: "", stderr: "" }], {
         allowedMounts: [root],
       });
       await client.callTool({
         name: "copy_files",
         arguments: { source: srcFile, destination: "abc:/work/a.txt" },
       });
-      expect(runner.calls[0]).toEqual(["cp", srcFile, "abc:/work/a.txt"]);
+      expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+      expect(runner.calls[1]).toEqual(["cp", srcFile, "abc:/work/a.txt"]);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -97,5 +101,38 @@ describe("copy_files", () => {
     });
     expect(res.isError).toBe(true);
     expect(runner.calls.length).toBe(0);
+  });
+});
+
+describe("managed-label enforcement", () => {
+  test("refuses to stop an unmanaged container", async () => {
+    const { runner, client } = await setup([UNMANAGED_INSPECT]);
+    const res: any = await client.callTool({ name: "stop_container", arguments: { id: "victim" } });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/CONTAINER_MCP_ALLOW_UNMANAGED/);
+    expect(runner.calls).toEqual([["inspect", "victim"]]);
+  });
+
+  test("refuses when inspect output is unrecognizable", async () => {
+    const { runner, client } = await setup([{ stdout: "weird", stderr: "" }]);
+    const res: any = await client.callTool({ name: "exec_in_container", arguments: { id: "x", command: ["ls"] } });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/not managed/);
+  });
+
+  test("accepts array-form labels", async () => {
+    const arrayInspect = {
+      stdout: JSON.stringify([{ labels: ["dev.container-mcp.managed=true"] }]),
+      stderr: "",
+    };
+    const { runner, client } = await setup([arrayInspect, { stdout: "", stderr: "" }]);
+    const res = await client.callTool({ name: "stop_container", arguments: { id: "abc" } });
+    expect(textOf(res)).toMatch(/stopped abc/);
+  });
+
+  test("CONTAINER_MCP_ALLOW_UNMANAGED skips inspection entirely", async () => {
+    const { runner, client } = await setup([{ stdout: "", stderr: "" }], { allowUnmanaged: true });
+    await client.callTool({ name: "stop_container", arguments: { id: "abc" } });
+    expect(runner.calls).toEqual([["stop", "abc"]]);
   });
 });

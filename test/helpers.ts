@@ -13,9 +13,22 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     defaultMemory: "2g",
     agentName: "claude",
     maxContainers: 10,
+    allowUnmanaged: false,
     ...overrides,
   };
 }
+
+export const MANAGED_INSPECT = {
+  stdout: JSON.stringify([
+    { configuration: { labels: { "dev.container-mcp.managed": "true", "dev.container-mcp.agent": "claude" } } },
+  ]),
+  stderr: "",
+};
+
+export const UNMANAGED_INSPECT = {
+  stdout: JSON.stringify([{ configuration: { labels: { other: "x" } } }]),
+  stderr: "",
+};
 
 export interface FakeRunner {
   run: CliRunner;
