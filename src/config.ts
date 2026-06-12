@@ -9,6 +9,7 @@ export interface Config {
   defaultCpus: string;
   defaultMemory: string;
   agentName: string;
+  maxContainers: number;
 }
 
 export const MANAGED_LABEL = "dev.container-mcp.managed=true";
@@ -41,6 +42,10 @@ export function loadConfig(
     allowedMounts = [...cwdEntry, scratchDir];
   }
 
+  const rawMax = env.CONTAINER_MCP_MAX_CONTAINERS;
+  const parsedMax = rawMax !== undefined ? parseInt(rawMax, 10) : NaN;
+  const maxContainers = Number.isInteger(parsedMax) && parsedMax > 0 ? parsedMax : 10;
+
   return {
     allowedMounts,
     scratchDir,
@@ -48,5 +53,6 @@ export function loadConfig(
     defaultCpus: env.CONTAINER_MCP_DEFAULT_CPUS ?? "2",
     defaultMemory: env.CONTAINER_MCP_DEFAULT_MEMORY ?? "2g",
     agentName: env.CONTAINER_MCP_AGENT_NAME ?? "agent",
+    maxContainers,
   };
 }

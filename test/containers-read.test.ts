@@ -30,25 +30,23 @@ describe("list_containers", () => {
 });
 
 describe("container_logs", () => {
-  test("returns the last 100 lines by default", async () => {
-    const lines = Array.from({ length: 150 }, (_, i) => `line ${i + 1}`).join("\n");
+  test("returns the last 100 lines by default via CLI -n flag", async () => {
+    const lines = "line 1\nline 2\nline 3";
     const { runner, client } = await setup([{ stdout: lines, stderr: "" }]);
     const res = await client.callTool({ name: "container_logs", arguments: { id: "abc" } });
-    const out = textOf(res).split("\n");
-    expect(out.length).toBe(100);
-    expect(out[0]).toBe("line 51");
-    expect(out[99]).toBe("line 150");
-    expect(runner.calls[0]).toEqual(["logs", "abc"]);
+    expect(textOf(res)).toBe("line 1\nline 2\nline 3");
+    expect(runner.calls[0]).toEqual(["logs", "-n", "100", "abc"]);
   });
 
-  test("respects a custom tail count", async () => {
+  test("respects a custom tail count via CLI -n flag", async () => {
     const lines = "a\nb\nc\nd";
-    const { client } = await setup([{ stdout: lines, stderr: "" }]);
+    const { runner, client } = await setup([{ stdout: lines, stderr: "" }]);
     const res = await client.callTool({
       name: "container_logs",
       arguments: { id: "abc", tail: 2 },
     });
-    expect(textOf(res)).toBe("c\nd");
+    expect(textOf(res)).toBe("a\nb\nc\nd");
+    expect(runner.calls[0]).toEqual(["logs", "-n", "2", "abc"]);
   });
 
   test("rejects an id that looks like a flag", async () => {

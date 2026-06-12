@@ -12,6 +12,7 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     defaultCpus: "2",
     defaultMemory: "2g",
     agentName: "claude",
+    maxContainers: 10,
     ...overrides,
   };
 }

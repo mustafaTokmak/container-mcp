@@ -82,4 +82,21 @@ describe("loadConfig", () => {
     expect(cfg.defaultMemory).toBe("8g");
     expect(cfg.agentName).toBe("claude");
   });
+
+  test("maxContainers defaults to 10 when not set", () => {
+    const cfg = loadConfigWithCleanup({}, "/x");
+    expect(cfg.maxContainers).toBe(10);
+  });
+
+  test("maxContainers can be overridden via CONTAINER_MCP_MAX_CONTAINERS", () => {
+    const cfg = loadConfigWithCleanup({ CONTAINER_MCP_MAX_CONTAINERS: "5" }, "/x");
+    expect(cfg.maxContainers).toBe(5);
+  });
+
+  test("maxContainers falls back to 10 for invalid values", () => {
+    const cfg1 = loadConfigWithCleanup({ CONTAINER_MCP_MAX_CONTAINERS: "abc" }, "/x");
+    expect(cfg1.maxContainers).toBe(10);
+    const cfg2 = loadConfigWithCleanup({ CONTAINER_MCP_MAX_CONTAINERS: "-3" }, "/x");
+    expect(cfg2.maxContainers).toBe(10);
+  });
 });

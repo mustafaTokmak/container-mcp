@@ -19,13 +19,16 @@ async function setup(results: any[] = [], cfgOverrides = {}) {
 
 describe("run_container", () => {
   test("runs detached with default limits and management labels", async () => {
-    const { runner, client } = await setup([{ stdout: "abc123\n", stderr: "" }]);
+    const { runner, client } = await setup([
+      { stdout: "[]", stderr: "" },
+      { stdout: "abc123\n", stderr: "" },
+    ]);
     const res = await client.callTool({
       name: "run_container",
       arguments: { image: "alpine:latest" },
     });
     expect(textOf(res)).toBe("abc123");
-    expect(runner.calls[0]).toEqual([
+    expect(runner.calls[1]).toEqual([
       "run",
       "--detach",
       "--cpus",
@@ -41,7 +44,10 @@ describe("run_container", () => {
   });
 
   test("applies name, command, env, and per-call limits", async () => {
-    const { runner, client } = await setup([{ stdout: "id1", stderr: "" }]);
+    const { runner, client } = await setup([
+      { stdout: "[]", stderr: "" },
+      { stdout: "id1", stderr: "" },
+    ]);
     await client.callTool({
       name: "run_container",
       arguments: {
@@ -53,7 +59,7 @@ describe("run_container", () => {
         env: { FOO: "bar" },
       },
     });
-    const args = runner.calls[0];
+    const args = runner.calls[1];
     expect(args).toContain("--name");
     expect(args[args.indexOf("--name") + 1]).toBe("test-run");
     expect(args[args.indexOf("--cpus") + 1]).toBe("4");
@@ -71,9 +77,13 @@ describe("run_container", () => {
     fs.mkdirSync(src);
     fs.mkdirSync(cache);
     try {
-      const { runner, client } = await setup([{ stdout: "id2", stderr: "" }], {
-        allowedMounts: [root],
-      });
+      const { runner, client } = await setup(
+        [
+          { stdout: "[]", stderr: "" },
+          { stdout: "id2", stderr: "" },
+        ],
+        { allowedMounts: [root] }
+      );
       await client.callTool({
         name: "run_container",
         arguments: {
@@ -84,7 +94,7 @@ describe("run_container", () => {
           ],
         },
       });
-      const args = runner.calls[0];
+      const args = runner.calls[1];
       const volumes = args.filter((_, i) => args[i - 1] === "--volume");
       expect(volumes).toEqual([`${src}:/work`, `${cache}:/cache:ro`]);
     } finally {
@@ -93,7 +103,7 @@ describe("run_container", () => {
   });
 
   test("rejects a mount outside the allowlist without calling the CLI", async () => {
-    const { runner, client } = await setup();
+    const { runner, client } = await setup([{ stdout: "[]", stderr: "" }]);
     const res: any = await client.callTool({
       name: "run_container",
       arguments: {
@@ -103,17 +113,17 @@ describe("run_container", () => {
     });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/not allowed/);
-    expect(runner.calls.length).toBe(0);
+    expect(runner.calls.length).toBe(1);
   });
 
   test("rejects an image that looks like a flag", async () => {
-    const { runner, client } = await setup();
+    const { runner, client } = await setup([{ stdout: "[]", stderr: "" }]);
     const res: any = await client.callTool({
       name: "run_container",
       arguments: { image: "--privileged" },
     });
     expect(res.isError).toBe(true);
-    expect(runner.calls.length).toBe(0);
+    expect(runner.calls.length).toBe(1);
   });
 
   test("blocked entirely in read-only mode", async () => {
@@ -128,13 +138,13 @@ describe("run_container", () => {
   });
 
   test("rejects cpus/memory values that look like flags", async () => {
-    const { runner, client } = await setup();
+    const { runner, client } = await setup([{ stdout: "[]", stderr: "" }]);
     const res: any = await client.callTool({
       name: "run_container",
       arguments: { image: "alpine", cpus: "--network=host" },
     });
     expect(res.isError).toBe(true);
-    expect(runner.calls.length).toBe(0);
+    expect(runner.calls.length).toBe(1);
   });
 
   test("rejects a mount destination containing a colon", async () => {
@@ -143,7 +153,10 @@ describe("run_container", () => {
     const src = path.join(root, "src");
     fs.mkdirSync(src);
     try {
-      const { runner, client } = await setup([], { allowedMounts: [root] });
+      const { runner, client } = await setup(
+        [{ stdout: "[]", stderr: "" }],
+        { allowedMounts: [root] }
+      );
       const res: any = await client.callTool({
         name: "run_container",
         arguments: {
@@ -153,13 +166,14 @@ describe("run_container", () => {
       });
       expect(res.isError).toBe(true);
       expect(textOf(res)).toMatch(/Invalid mount destination/);
-      expect(runner.calls.length).toBe(0);
+      expect(runner.calls.length).toBe(1);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
   test("rejects an env variable name containing '='", async () => {
+    // Zod schema rejects invalid env keys before the handler runs, so no CLI calls.
     const { runner, client } = await setup();
     const res: any = await client.callTool({
       name: "run_container",
@@ -167,5 +181,63 @@ describe("run_container", () => {
     });
     expect(res.isError).toBe(true);
     expect(runner.calls.length).toBe(0);
+  });
+
+  test("refuses to run when the container limit is reached", async () => {
+    const { runner, client } = await setup(
+      [{ stdout: '[{"id":"a"},{"id":"b"}]', stderr: "" }],
+      { maxContainers: 2 }
+    );
+    const res: any = await client.callTool({ name: "run_container", arguments: { image: "alpine" } });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/CONTAINER_MCP_MAX_CONTAINERS/);
+    expect(runner.calls.length).toBe(1);
+  });
+
+  test("proceeds when list output is not parseable JSON", async () => {
+    const { runner, client } = await setup([
+      { stdout: "not json", stderr: "" },
+      { stdout: "abc123\n", stderr: "" },
+    ]);
+    const res = await client.callTool({ name: "run_container", arguments: { image: "alpine" } });
+    expect(textOf(res)).toBe("abc123");
+  });
+
+  test("wait: true runs attached with a long timeout and returns output", async () => {
+    const { runner, client } = await setup([
+      { stdout: "[]", stderr: "" },
+      { stdout: "47 tests passed\n", stderr: "" },
+    ]);
+    const res = await client.callTool({
+      name: "run_container",
+      arguments: { image: "node:20", wait: true, command: ["npm", "test"] },
+    });
+    expect(textOf(res)).toBe("47 tests passed");
+    expect(runner.calls[1]).not.toContain("--detach");
+    expect(runner.calls[1].slice(-3)).toEqual(["node:20", "npm", "test"]);
+    expect(runner.optsLog[1]).toEqual({ timeoutMs: 600_000 });
+  });
+
+  test("workdir is passed through guarded", async () => {
+    const { runner, client } = await setup([
+      { stdout: "[]", stderr: "" },
+      { stdout: "id", stderr: "" },
+    ]);
+    await client.callTool({
+      name: "run_container",
+      arguments: { image: "alpine", workdir: "/work" },
+    });
+    const args = runner.calls[1];
+    expect(args[args.indexOf("--workdir") + 1]).toBe("/work");
+  });
+
+  test("rejects a command whose first token looks like a flag", async () => {
+    const { runner, client } = await setup([{ stdout: "[]", stderr: "" }]);
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: "alpine", command: ["--rm", "x"] },
+    });
+    expect(res.isError).toBe(true);
+    expect(runner.calls.length).toBe(1);
   });
 });

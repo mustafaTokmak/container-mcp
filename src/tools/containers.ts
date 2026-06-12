@@ -31,7 +31,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
     "container_logs",
     {
       title: "Container logs",
-      description: "Fetch the most recent log lines from a container (default: last 100).",
+      description: "Fetch the most recent log lines from a container (default: last 100). The tail is applied server-side via the CLI -n flag.",
       inputSchema: {
         id: z.string().describe("Container ID or name"),
         tail: z.number().int().positive().max(1000).optional().describe("Number of lines (default 100)"),
@@ -41,9 +41,8 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
     async ({ id, tail }) => {
       try {
         const safeId = assertSafeCliValue(id, "container id");
-        const res = await ctx.run(["logs", safeId]);
-        const lines = res.stdout.replace(/\n$/, "").split("\n");
-        return ok(lines.slice(-(tail ?? 100)).join("\n"));
+        const res = await ctx.run(["logs", "-n", String(tail ?? 100), safeId]);
+        return ok(res.stdout.trimEnd());
       } catch (err) {
         return fail(err);
       }
@@ -55,7 +54,9 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
     {
       title: "Run container",
       description:
-        "Run a container in the background inside its own lightweight VM and return its ID. " +
+        "Run a container inside its own lightweight VM. " +
+        "By default runs detached and returns the container ID. " +
+        "Pass wait: true to run to completion and return the container's output (10 minute limit). " +
         "Mount sources must be inside the allowed host paths. " +
         "Default CPU/memory limits are applied unless overridden.",
       inputSchema: {
@@ -77,17 +78,33 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           .record(z.string().regex(/^[^=\-][^=]*$/, "invalid env variable name"), z.string())
           .optional()
           .describe("Environment variables"),
+        workdir: z.string().optional().describe("Working directory inside the container"),
+        wait: z.boolean().optional().describe("Run to completion and return the container's output instead of its ID (10 minute limit)"),
       },
     },
-    async ({ image, name, command, mounts, cpus, memory, env }) => {
+    async ({ image, name, command, mounts, cpus, memory, env, workdir, wait }) => {
       try {
         ensureWritable(ctx.config, "run_container");
+
+        // Container-count cap. Each Apple container is a full VM — an unbounded count
+        // can exhaust the machine. The cap is a resource guard, not a security boundary.
+        const listRes = await ctx.run(["list", "--format", "json"]);
+        let parsed: unknown;
+        try { parsed = JSON.parse(listRes.stdout); } catch { parsed = null; }
+        if (Array.isArray(parsed) && parsed.length >= ctx.config.maxContainers) {
+          return fail(
+            `Container limit reached (${parsed.length} running, max ${ctx.config.maxContainers}). ` +
+            `Stop or remove one (stop_container / remove_container), or raise CONTAINER_MCP_MAX_CONTAINERS.`
+          );
+        }
+
         const safeImage = assertSafeCliValue(image, "image reference");
         const safeCpus = assertSafeCliValue(cpus ?? ctx.config.defaultCpus, "cpus");
         const safeMemory = assertSafeCliValue(memory ?? ctx.config.defaultMemory, "memory");
-        const args = [
-          "run",
-          "--detach",
+        if (command?.length) assertSafeCliValue(command[0], "command");
+        const args = ["run"];
+        if (!wait) args.push("--detach");
+        args.push(
           "--cpus",
           safeCpus,
           "--memory",
@@ -96,7 +113,8 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           MANAGED_LABEL,
           "--label",
           `${AGENT_LABEL_KEY}=${ctx.config.agentName}`,
-        ];
+        );
+        if (workdir) args.push("--workdir", assertSafeCliValue(workdir, "workdir"));
         if (name) args.push("--name", assertSafeCliValue(name, "container name"));
         for (const m of mounts ?? []) {
           if (!m.destination.startsWith("/") || m.destination.includes(":")) {
@@ -112,6 +130,10 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           args.push("--env", `${key}=${value}`);
         }
         args.push(safeImage, ...(command ?? []));
+        if (wait) {
+          const res = await ctx.run(args, { timeoutMs: 600_000 });
+          return ok(res.stdout.trim() || "(no output)");
+        }
         const res = await ctx.run(args);
         return ok(res.stdout.trim());
       } catch (err) {
