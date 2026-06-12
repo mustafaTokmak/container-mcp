@@ -111,4 +111,38 @@ describe("run_container", () => {
     expect(textOf(res)).toMatch(/Read-only/);
     expect(runner.calls.length).toBe(0);
   });
+
+  test("rejects cpus/memory values that look like flags", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: "alpine", cpus: "--network=host" },
+    });
+    expect(res.isError).toBe(true);
+    expect(runner.calls.length).toBe(0);
+  });
+
+  test("rejects a mount destination containing a colon", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: {
+        image: "alpine",
+        mounts: [{ source: "/Users/me/proj/src", destination: "/x:/y" }],
+      },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/Invalid mount destination/);
+    expect(runner.calls.length).toBe(0);
+  });
+
+  test("rejects an env variable name containing '='", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: "alpine", env: { "FOO=BAR": "x" } },
+    });
+    expect(res.isError).toBe(true);
+    expect(runner.calls.length).toBe(0);
+  });
 });

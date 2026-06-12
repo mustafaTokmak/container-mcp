@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ok, fail, type ToolContext } from "./util.js";
-import { assertSafeCliValue, ensureWritable, validateHostPath } from "../safety.js";
+import { assertSafeCliValue, ensureWritable, validateHostPath, SafetyError } from "../safety.js";
 import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
 export function registerContainerTools(server: McpServer, ctx: ToolContext): void {
@@ -71,20 +71,25 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           .optional(),
         cpus: z.string().optional().describe("CPU limit, e.g. '4'"),
         memory: z.string().optional().describe("Memory limit, e.g. '4g'"),
-        env: z.record(z.string()).optional().describe("Environment variables"),
+        env: z
+          .record(z.string().regex(/^[^=\-][^=]*$/, "invalid env variable name"), z.string())
+          .optional()
+          .describe("Environment variables"),
       },
     },
     async ({ image, name, command, mounts, cpus, memory, env }) => {
       try {
         ensureWritable(ctx.config, "run_container");
         const safeImage = assertSafeCliValue(image, "image reference");
+        const safeCpus = assertSafeCliValue(cpus ?? ctx.config.defaultCpus, "cpus");
+        const safeMemory = assertSafeCliValue(memory ?? ctx.config.defaultMemory, "memory");
         const args = [
           "run",
           "--detach",
           "--cpus",
-          cpus ?? ctx.config.defaultCpus,
+          safeCpus,
           "--memory",
-          memory ?? ctx.config.defaultMemory,
+          safeMemory,
           "--label",
           MANAGED_LABEL,
           "--label",
@@ -92,10 +97,16 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         ];
         if (name) args.push("--name", assertSafeCliValue(name, "container name"));
         for (const m of mounts ?? []) {
+          if (!m.destination.startsWith("/") || m.destination.includes(":")) {
+            throw new SafetyError(`Invalid mount destination: ${JSON.stringify(m.destination)}`);
+          }
           const source = validateHostPath(m.source, ctx.config);
           args.push("--volume", `${source}:${m.destination}${m.readonly ? ":ro" : ""}`);
         }
         for (const [key, value] of Object.entries(env ?? {})) {
+          if (/^-|=/.test(key)) {
+            throw new SafetyError(`Invalid env variable name: ${JSON.stringify(key)}`);
+          }
           args.push("--env", `${key}=${value}`);
         }
         args.push(safeImage, ...(command ?? []));
