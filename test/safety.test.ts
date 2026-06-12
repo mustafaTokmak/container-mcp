@@ -1,4 +1,7 @@
 import { describe, test, expect } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { validateHostPath, ensureWritable, SafetyError } from "../src/safety.js";
 import type { Config } from "../src/config.js";
 
@@ -34,6 +37,41 @@ describe("validateHostPath", () => {
 
   test("error message names the allowed roots and the env var", () => {
     expect(() => validateHostPath("/etc", cfg)).toThrow(/CONTAINER_MCP_ALLOWED_MOUNTS/);
+  });
+
+  test("rejects a symlink pointing outside the allowed roots", () => {
+    const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "safety-")));
+    const link = path.join(real, "escape");
+    fs.symlinkSync("/etc", link);
+    const symCfg = { ...cfg, allowedMounts: [real] };
+    try {
+      expect(() => validateHostPath(link, symCfg)).toThrow(SafetyError);
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts a not-yet-existing path under an allowed root", () => {
+    const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "safety-")));
+    const symCfg = { ...cfg, allowedMounts: [real] };
+    try {
+      expect(validateHostPath(path.join(real, "new-dir", "out.txt"), symCfg)).toBe(
+        path.join(real, "new-dir", "out.txt")
+      );
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts a path through macOS /tmp symlink when allowlist has the real path", () => {
+    const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "safety-")));
+    const symCfg = { ...cfg, allowedMounts: [real] };
+    try {
+      // validate the same dir addressed through its canonical path
+      expect(validateHostPath(real, symCfg)).toBe(real);
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
   });
 });
 
