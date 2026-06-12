@@ -11,6 +11,7 @@ const cfg: Config = {
   defaultCpus: "2",
   defaultMemory: "2g",
   agentName: "agent",
+  scratchDir: "/tmp",
 };
 
 describe("validateHostPath", () => {
