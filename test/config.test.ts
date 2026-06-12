@@ -16,15 +16,18 @@ describe("loadConfig", () => {
   test("CONTAINER_MCP_ALLOWED_MOUNTS replaces defaults entirely", () => {
     const cfg = loadConfig({ CONTAINER_MCP_ALLOWED_MOUNTS: "/a:/b/c" }, "/Users/me/proj");
     expect(cfg.allowedMounts).toEqual(["/a", "/b/c"]);
+    expect(loadConfig({ CONTAINER_MCP_ALLOWED_MOUNTS: "rel/dir" }, "/Users/me/proj").allowedMounts)
+      .toEqual(["/Users/me/proj/rel/dir"]);
   });
 
   test("readOnly accepts 1 and true case-insensitively", () => {
     expect(loadConfig({ CONTAINER_MCP_READONLY: "1" }, "/x").readOnly).toBe(true);
     expect(loadConfig({ CONTAINER_MCP_READONLY: "TRUE" }, "/x").readOnly).toBe(true);
     expect(loadConfig({ CONTAINER_MCP_READONLY: "no" }, "/x").readOnly).toBe(false);
+    expect(loadConfig({ CONTAINER_MCP_READONLY: "" }, "/x").readOnly).toBe(false);
   });
 
-  test("limit and agent name overrides", () => {
+  test("resource defaults and agent name overrides", () => {
     const cfg = loadConfig(
       {
         CONTAINER_MCP_DEFAULT_CPUS: "8",

@@ -17,7 +17,7 @@ export function loadConfig(
   cwd: string = process.cwd()
 ): Config {
   const allowedMounts = env.CONTAINER_MCP_ALLOWED_MOUNTS
-    ? env.CONTAINER_MCP_ALLOWED_MOUNTS.split(":").filter(Boolean).map((p) => path.resolve(p))
+    ? env.CONTAINER_MCP_ALLOWED_MOUNTS.split(":").filter(Boolean).map((p) => path.resolve(cwd, p))
     : [path.resolve(cwd), os.tmpdir()];
 
   return {
