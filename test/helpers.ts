@@ -1,4 +1,4 @@
-import type { CliResult } from "../src/cli.js";
+import type { CliResult, CliRunner, RunOptions } from "../src/cli.js";
 import type { Config } from "../src/config.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -17,18 +17,22 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
 }
 
 export interface FakeRunner {
-  run: (args: string[]) => Promise<CliResult>;
+  run: CliRunner;
   calls: string[][];
+  optsLog: (RunOptions | undefined)[];
 }
 
 /** Records every call; returns queued results in order, then a default empty result. */
 export function makeFakeRunner(results: (CliResult | Error)[] = []): FakeRunner {
   const calls: string[][] = [];
+  const optsLog: (RunOptions | undefined)[] = [];
   const queue = [...results];
   return {
     calls,
-    run: async (args: string[]) => {
+    optsLog,
+    run: async (args: string[], opts?: RunOptions) => {
       calls.push(args);
+      optsLog.push(opts);
       const next = queue.shift();
       if (next instanceof Error) throw next;
       return next ?? { stdout: "", stderr: "" };

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, afterEach } from "vitest";
 import { createCliRunner, CliError } from "../src/cli.js";
 
 function fakeExec(result: { stdout: string; stderr: string } | Error) {
@@ -53,7 +53,7 @@ describe("createCliRunner", () => {
       code: null, killed: true, signal: "SIGTERM", stderr: "",
     });
     const run = createCliRunner(fakeExec(err).fn);
-    await expect(run(["run", "ubuntu"])).rejects.toThrow(/timed out after 120s/);
+    await expect(run(["run", "ubuntu"])).rejects.toThrow(/timed out after \d+ms/);
   });
 
   test("maxBuffer overflow produces a readable error", async () => {
@@ -62,5 +62,58 @@ describe("createCliRunner", () => {
     });
     const run = createCliRunner(fakeExec(err).fn);
     await expect(run(["logs", "abc"])).rejects.toThrow(/more than 10MB/);
+  });
+
+  // --- New tests for Fix Round Task 2 ---
+
+  test("per-call timeout overrides the default", async () => {
+    const { fn, optsSeen } = fakeExec({ stdout: "", stderr: "" });
+    const run = createCliRunner(fn);
+    await run(["images", "pull", "x"], { timeoutMs: 600_000 });
+    expect((optsSeen[0] as { timeout: number }).timeout).toBe(600_000);
+  });
+
+  describe("CONTAINER_MCP_TIMEOUT_MS sets the base timeout", () => {
+    const originalEnv = process.env.CONTAINER_MCP_TIMEOUT_MS;
+
+    afterEach(() => {
+      if (originalEnv === undefined) {
+        delete process.env.CONTAINER_MCP_TIMEOUT_MS;
+      } else {
+        process.env.CONTAINER_MCP_TIMEOUT_MS = originalEnv;
+      }
+    });
+
+    test("reads env at creation time", async () => {
+      process.env.CONTAINER_MCP_TIMEOUT_MS = "5000";
+      const { fn, optsSeen } = fakeExec({ stdout: "", stderr: "" });
+      const run = createCliRunner(fn);
+      await run(["list"]);
+      expect((optsSeen[0] as { timeout: number }).timeout).toBe(5000);
+    });
+  });
+
+  test("non-zero exit includes exit code and stdout tail", async () => {
+    const err = Object.assign(new Error("exit 1"), {
+      code: 1,
+      stdout: "47 tests passed, 1 failed\n",
+      stderr: "exit status 1",
+    });
+    const { fn } = fakeExec(err);
+    const run = createCliRunner(fn);
+    const caught = await run(["exec", "c1", "npm", "test"]).catch((e) => e);
+    expect(caught).toBeInstanceOf(CliError);
+    expect(caught.message).toMatch(/exit 1/);
+    expect(caught.message).toMatch(/1 failed/);
+    expect(caught.exitCode).toBe(1);
+  });
+
+  test("timeout error names the env var", async () => {
+    const err = Object.assign(new Error("Command failed"), {
+      code: null, killed: true, signal: "SIGTERM", stderr: "",
+    });
+    const run = createCliRunner(fakeExec(err).fn);
+    const caught = await run(["images", "pull", "ubuntu"]).catch((e) => e);
+    expect(caught.message).toMatch(/CONTAINER_MCP_TIMEOUT_MS/);
   });
 });

@@ -6,9 +6,15 @@ export interface CliResult {
   stderr: string;
 }
 
-export type CliRunner = (args: string[]) => Promise<CliResult>;
+export interface RunOptions {
+  timeoutMs?: number;
+}
+
+export type CliRunner = (args: string[], opts?: RunOptions) => Promise<CliResult>;
 
 export class CliError extends Error {
+  exitCode?: number;
+
   constructor(message: string, hint?: string) {
     super(hint ? `${message}\n${hint}` : message);
     this.name = "CliError";
@@ -32,30 +38,61 @@ const execFileAsync = promisify(execFile);
 const defaultExec: ExecFn = (cmd, args, opts) =>
   execFileAsync(cmd, args, opts) as Promise<{ stdout: string; stderr: string }>;
 
+function parsePositiveInt(val: string | undefined): number | undefined {
+  if (val === undefined) return undefined;
+  const n = Number(val);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 export function createCliRunner(execFn: ExecFn = defaultExec): CliRunner {
-  return async (args: string[]): Promise<CliResult> => {
+  const baseTimeout = parsePositiveInt(process.env.CONTAINER_MCP_TIMEOUT_MS) ?? 120_000;
+
+  return async (args: string[], opts?: RunOptions): Promise<CliResult> => {
+    const timeout = opts?.timeoutMs ?? baseTimeout;
     try {
       const { stdout, stderr } = await execFn("container", args, {
-        timeout: 120_000,
+        timeout,
         maxBuffer: 10 * 1024 * 1024,
       });
       return { stdout, stderr };
     } catch (err) {
-      const e = err as NodeJS.ErrnoException & { stderr?: string; killed?: boolean; signal?: string };
+      const e = err as NodeJS.ErrnoException & {
+        stderr?: string;
+        stdout?: string;
+        killed?: boolean;
+        signal?: string;
+      };
       if (e.code === "ENOENT") {
         throw new CliError("container CLI not found", NOT_INSTALLED_HINT);
       }
       if (e.killed) {
         throw new CliError(
-          `container ${args.join(" ")} timed out after 120s (killed by ${e.signal ?? "signal"})`
+          `container ${args.join(" ")} timed out after ${timeout}ms. ` +
+            `Long pulls/builds get a higher limit automatically; ` +
+            `set CONTAINER_MCP_TIMEOUT_MS to raise the base limit.`
         );
       }
       if (e.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-        throw new CliError(`container ${args.join(" ")} produced more than 10MB of output`);
+        throw new CliError(
+          `container ${args.join(" ")} produced more than 10MB of output. ` +
+            `Output exceeded 10MB. For logs, use the tail parameter.`
+        );
       }
       const stderr = (e.stderr || e.message || "").trim();
-      const hint = /not running|connection|XPC|daemon/i.test(stderr) ? SERVICE_HINT : undefined;
-      throw new CliError(`container ${args.join(" ")} failed: ${stderr}`, hint);
+      const stdoutTail = (e.stdout ?? "").trim().slice(-2000);
+      const hint = /not running|connection|XPC|daemon|apiserver/i.test(stderr)
+        ? SERVICE_HINT
+        : undefined;
+      const exitCodePart = typeof e.code === "number" ? ` (exit ${e.code})` : "";
+      const stdoutPart = stdoutTail ? `\nstdout (last 2000 chars):\n${stdoutTail}` : "";
+      const cliErr = new CliError(
+        `container ${args.join(" ")} failed${exitCodePart}: ${stderr}${stdoutPart}`,
+        hint
+      );
+      if (typeof e.code === "number") {
+        cliErr.exitCode = e.code;
+      }
+      throw cliErr;
     }
   };
 }
