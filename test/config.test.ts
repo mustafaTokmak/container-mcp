@@ -100,6 +100,11 @@ describe("loadConfig", () => {
     expect(cfg2.maxContainers).toBe(10);
   });
 
+  test("maxContainers accepts scientific notation like 1e2", () => {
+    const cfg = loadConfigWithCleanup({ CONTAINER_MCP_MAX_CONTAINERS: "1e2" }, "/x");
+    expect(cfg.maxContainers).toBe(100);
+  });
+
   test("allowUnmanaged defaults to false", () => {
     const cfg = loadConfigWithCleanup({}, "/x");
     expect(cfg.allowUnmanaged).toBe(false);

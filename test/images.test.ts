@@ -35,6 +35,7 @@ describe("pull_image", () => {
     });
     expect(textOf(res)).toBe("done");
     expect(runner.calls[0]).toEqual(["image", "pull", "alpine:latest"]);
+    expect(runner.optsLog[0]).toEqual({ timeoutMs: 600_000 });
   });
 
   test("blocked in read-only mode", async () => {
@@ -87,6 +88,7 @@ describe("build_image", () => {
         dockerfile,
         contextDir,
       ]);
+      expect(runner.optsLog[0]).toEqual({ timeoutMs: 600_000 });
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

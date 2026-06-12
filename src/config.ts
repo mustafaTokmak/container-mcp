@@ -44,7 +44,7 @@ export function loadConfig(
   }
 
   const rawMax = env.CONTAINER_MCP_MAX_CONTAINERS;
-  const parsedMax = rawMax !== undefined ? parseInt(rawMax, 10) : NaN;
+  const parsedMax = rawMax !== undefined ? Number(rawMax) : NaN;
   const maxContainers = Number.isInteger(parsedMax) && parsedMax > 0 ? parsedMax : 10;
 
   return {

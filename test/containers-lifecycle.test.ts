@@ -32,6 +32,15 @@ describe("stop_container", () => {
     expect(res.isError).toBe(true);
     expect(runner.calls.length).toBe(0);
   });
+
+  test("rejects an empty container id at the schema layer", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client
+      .callTool({ name: "stop_container", arguments: { id: "" } })
+      .catch((e) => ({ isError: true, content: [{ type: "text", text: String(e) }] }));
+    expect(res.isError).toBe(true);
+    expect(runner.calls.length).toBe(0);
+  });
 });
 
 describe("remove_container", () => {
@@ -94,13 +103,42 @@ describe("copy_files", () => {
   });
 
   test("rejects a host destination outside allowed roots", async () => {
-    const { runner, client } = await setup();
+    // Source is a container path: ensureManaged inspect passes (managed), then
+    // destination host-path validation fails because /Users/me/other is outside the allowed roots.
+    const { runner, client } = await setup([MANAGED_INSPECT]);
     const res: any = await client.callTool({
       name: "copy_files",
       arguments: { source: "abc:/etc/passwd", destination: "/Users/me/other/pw" },
     });
     expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/not allowed/);
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+  });
+
+  test("rejects a relative host path that contains a colon", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "copy_files",
+      arguments: { source: "weird/dir:file", destination: "/tmp/x" },
+    });
+    expect(res.isError).toBe(true);
     expect(runner.calls.length).toBe(0);
+  });
+
+  test("enforces managed label on the container side of a container-to-host copy", async () => {
+    const real = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cp-")));
+    const { runner, client } = await setup([UNMANAGED_INSPECT], { allowedMounts: [real] });
+    try {
+      const res: any = await client.callTool({
+        name: "copy_files",
+        arguments: { source: "victim:/data", destination: path.join(real, "out") },
+      });
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toMatch(/not managed/);
+      expect(runner.calls).toEqual([["inspect", "victim"]]);
+    } finally {
+      fs.rmSync(real, { recursive: true, force: true });
+    }
   });
 });
 

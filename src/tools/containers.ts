@@ -4,7 +4,7 @@ import { ok, fail, type ToolContext } from "./util.js";
 import { assertSafeCliValue, ensureWritable, validateHostPath, validateExistingHostPath, SafetyError } from "../safety.js";
 import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
-const isContainerPath = (p: string) => /^[^/:]+:/.test(p);
+const isContainerPath = (p: string) => /^[A-Za-z0-9][A-Za-z0-9_.-]*:/.test(p);
 
 /**
  * The inspect JSON layout is not documented upstream; look for labels in
@@ -68,7 +68,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       title: "Container logs",
       description: "Fetch the most recent log lines from a container (default: last 100). The tail is applied server-side via the CLI -n flag.",
       inputSchema: {
-        id: z.string().describe("Container ID or name"),
+        id: z.string().min(1).describe("Container ID or name"),
         tail: z.number().int().positive().max(1000).optional().describe("Number of lines (default 100)"),
       },
       annotations: { readOnlyHint: true },
@@ -96,25 +96,25 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         "Mount sources must be inside the allowed host paths. " +
         "Default CPU/memory limits are applied unless overridden.",
       inputSchema: {
-        image: z.string().describe("Image reference, e.g. alpine:latest"),
-        name: z.string().optional().describe("Optional container name"),
-        command: z.array(z.string()).optional().describe("Command and arguments to run"),
+        image: z.string().min(1).describe("Image reference, e.g. alpine:latest"),
+        name: z.string().min(1).optional().describe("Optional container name"),
+        command: z.array(z.string().min(1)).optional().describe("Command and arguments to run"),
         mounts: z
           .array(
             z.object({
-              source: z.string().describe("Host path (must be inside an allowed root)"),
-              destination: z.string().describe("Path inside the container"),
+              source: z.string().min(1).describe("Host path (must be inside an allowed root)"),
+              destination: z.string().min(1).describe("Path inside the container"),
               readonly: z.boolean().optional(),
             })
           )
           .optional(),
-        cpus: z.string().optional().describe("CPU limit, e.g. '4'"),
-        memory: z.string().optional().describe("Memory limit, e.g. '4g'"),
+        cpus: z.string().min(1).optional().describe("CPU limit, e.g. '4'"),
+        memory: z.string().min(1).optional().describe("Memory limit, e.g. '4g'"),
         env: z
           .record(z.string().regex(/^[^=\-][^=]*$/, "invalid env variable name"), z.string())
           .optional()
           .describe("Environment variables"),
-        workdir: z.string().optional().describe("Working directory inside the container"),
+        workdir: z.string().min(1).optional().describe("Working directory inside the container"),
         wait: z.boolean().optional().describe("Run to completion and return the container's output instead of its ID (10 minute limit)"),
       },
     },
@@ -183,7 +183,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
     {
       title: "Stop container",
       description: "Stop a running container.",
-      inputSchema: { id: z.string().describe("Container ID or name") },
+      inputSchema: { id: z.string().min(1).describe("Container ID or name") },
     },
     async ({ id }) => {
       try {
@@ -204,7 +204,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       title: "Remove container",
       description: "Delete a container. Pass force: true to delete a running container.",
       inputSchema: {
-        id: z.string().describe("Container ID or name"),
+        id: z.string().min(1).describe("Container ID or name"),
         force: z.boolean().optional().describe("Force-delete even if running"),
       },
       annotations: { destructiveHint: true },
@@ -231,8 +231,8 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
       title: "Execute in container",
       description: "Run a command inside a running container and return its output.",
       inputSchema: {
-        id: z.string().describe("Container ID or name"),
-        command: z.array(z.string()).min(1).describe("Command and arguments"),
+        id: z.string().min(1).describe("Container ID or name"),
+        command: z.array(z.string().min(1)).min(1).describe("Command and arguments"),
       },
     },
     async ({ id, command }) => {
@@ -256,27 +256,41 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         "Copy files between host and container. Container paths use '<id>:<path>'. " +
         "Host paths must be inside the allowed roots.",
       inputSchema: {
-        source: z.string().describe("Source path (host path or <id>:<path>)"),
-        destination: z.string().describe("Destination path (host path or <id>:<path>)"),
+        source: z.string().min(1).describe("Source path (host path or <id>:<path>)"),
+        destination: z.string().min(1).describe("Destination path (host path or <id>:<path>)"),
       },
       annotations: { destructiveHint: true },
     },
     async ({ source, destination }) => {
       try {
         ensureWritable(ctx.config, "copy_files");
-        const src = isContainerPath(source)
-          ? assertSafeCliValue(source, "source path")
-          : validateExistingHostPath(source, ctx.config);
-        const dst = isContainerPath(destination)
-          ? assertSafeCliValue(destination, "destination path")
-          : validateHostPath(destination, ctx.config);
+        let src: string;
         if (isContainerPath(source)) {
+          src = assertSafeCliValue(source, "source path");
           const containerId = src.slice(0, src.indexOf(":"));
+          assertSafeCliValue(containerId, "container id");
           await ensureManaged(ctx, containerId);
+        } else {
+          if (!source.startsWith("/")) {
+            throw new SafetyError(
+              `Host paths must be absolute: ${JSON.stringify(source)}. Container paths use "<id>:<path>".`
+            );
+          }
+          src = validateExistingHostPath(source, ctx.config);
         }
+        let dst: string;
         if (isContainerPath(destination)) {
+          dst = assertSafeCliValue(destination, "destination path");
           const containerId = dst.slice(0, dst.indexOf(":"));
+          assertSafeCliValue(containerId, "container id");
           await ensureManaged(ctx, containerId);
+        } else {
+          if (!destination.startsWith("/")) {
+            throw new SafetyError(
+              `Host paths must be absolute: ${JSON.stringify(destination)}. Container paths use "<id>:<path>".`
+            );
+          }
+          dst = validateHostPath(destination, ctx.config);
         }
         await ctx.run(["cp", src, dst]);
         return ok(`copied ${source} -> ${destination}`);
