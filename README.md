@@ -25,19 +25,26 @@ boundary for code an AI agent wrote five seconds ago.
 Requires an Apple silicon Mac, macOS 26 or newer, and the
 [container CLI](https://github.com/apple/container/releases).
 
+Until the npm package is published, install from source:
+
 ```bash
-claude mcp add container -- npx -y container-mcp
+git clone https://github.com/mustafaTokmak/container-mcp.git
+cd container-mcp
+npm install && npm run build
+claude mcp add container -- node "$(pwd)/dist/index.js"
 ```
 
-Or in any MCP client config:
+Or in any MCP client config (point `command`/`args` at the built entry point):
 
 ```json
 {
   "mcpServers": {
-    "container": { "command": "npx", "args": ["-y", "container-mcp"] }
+    "container": { "command": "node", "args": ["/absolute/path/to/container-mcp/dist/index.js"] }
   }
 }
 ```
+
+Once published to npm, this becomes `claude mcp add container -- npx -y container-mcp`.
 
 ## Tools
 
