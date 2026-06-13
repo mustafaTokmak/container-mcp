@@ -130,3 +130,93 @@ describe("build_image", () => {
     }
   });
 });
+
+describe("remove_image", () => {
+  test("deletes an image", async () => {
+    const { runner, client } = await setup([{ stdout: "removed", stderr: "" }]);
+    const res = await client.callTool({
+      name: "remove_image",
+      arguments: { reference: "alpine:latest" },
+    });
+    expect(textOf(res)).toMatch(/removed/);
+    expect(runner.calls[0]).toEqual(["image", "delete", "alpine:latest"]);
+  });
+
+  test("force flag", async () => {
+    const { runner, client } = await setup([{ stdout: "", stderr: "" }]);
+    const res = await client.callTool({
+      name: "remove_image",
+      arguments: { reference: "x:1", force: true },
+    });
+    expect(runner.calls[0]).toEqual(["image", "delete", "--force", "x:1"]);
+  });
+
+  test("blocked in read-only mode", async () => {
+    const { runner, client } = await setup([], { readOnly: true });
+    const res: any = await client.callTool({
+      name: "remove_image",
+      arguments: { reference: "alpine:latest" },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/Read-only/);
+    expect(runner.calls.length).toBe(0);
+  });
+
+  test("rejects a flag-like reference", async () => {
+    const { runner, client } = await setup();
+    const res: any = await client.callTool({
+      name: "remove_image",
+      arguments: { reference: "--all" },
+    });
+    expect(res.isError).toBe(true);
+    expect(runner.calls.length).toBe(0);
+  });
+
+  test("is annotated destructive", async () => {
+    const { client } = await setup();
+    const tools = await client.listTools();
+    const removeTool = tools.tools.find((t) => t.name === "remove_image");
+    expect(removeTool).toBeDefined();
+    expect(removeTool?.annotations?.destructiveHint).toBe(true);
+  });
+});
+
+describe("prune_images", () => {
+  test("prunes dangling", async () => {
+    const { runner, client } = await setup([{ stdout: "pruned", stderr: "" }]);
+    const res = await client.callTool({
+      name: "prune_images",
+      arguments: {},
+    });
+    expect(textOf(res)).toMatch(/pruned/);
+    expect(runner.calls[0]).toEqual(["image", "prune"]);
+  });
+
+  test("all flag", async () => {
+    const { runner, client } = await setup([{ stdout: "", stderr: "" }]);
+    const res = await client.callTool({
+      name: "prune_images",
+      arguments: { all: true },
+    });
+    expect(runner.calls[0]).toEqual(["image", "prune", "--all"]);
+  });
+
+  test("blocked in read-only mode", async () => {
+    const { runner, client } = await setup([], { readOnly: true });
+    const res: any = await client.callTool({
+      name: "prune_images",
+      arguments: {},
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/Read-only/);
+    expect(runner.calls.length).toBe(0);
+  });
+
+  test("is annotated destructive", async () => {
+    const { client } = await setup();
+    const tools = await client.listTools();
+    const pruneTool = tools.tools.find((t) => t.name === "prune_images");
+    expect(pruneTool).toBeDefined();
+    expect(pruneTool?.annotations?.destructiveHint).toBe(true);
+  });
+});

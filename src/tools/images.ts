@@ -70,4 +70,51 @@ export function registerImageTools(server: McpServer, ctx: ToolContext): void {
       }
     }
   );
+
+  server.registerTool(
+    "remove_image",
+    {
+      title: "Remove image",
+      description: "Delete a local image by reference. Pass force: true to remove even if in use.",
+      inputSchema: {
+        reference: z.string().min(1).describe("Image reference, e.g. alpine:latest"),
+        force: z.boolean().optional().describe("Force removal"),
+      },
+      annotations: { destructiveHint: true },
+    },
+    async ({ reference, force }) => {
+      try {
+        ensureWritable(ctx.config, "remove_image");
+        const ref = assertSafeCliValue(reference, "image reference");
+        const args = ["image", "delete"];
+        if (force) args.push("--force");
+        args.push(ref);
+        const res = await ctx.run(args);
+        return ok(res.stdout.trim() || `removed ${ref}`);
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    "prune_images",
+    {
+      title: "Prune images",
+      description: "Remove dangling images to reclaim disk. Pass all: true to remove all unused images.",
+      inputSchema: { all: z.boolean().optional().describe("Remove all unused images, not just dangling") },
+      annotations: { destructiveHint: true },
+    },
+    async ({ all }) => {
+      try {
+        ensureWritable(ctx.config, "prune_images");
+        const args = ["image", "prune"];
+        if (all) args.push("--all");
+        const res = await ctx.run(args);
+        return ok(res.stdout.trim() || "pruned");
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
 }
