@@ -1,6 +1,6 @@
 {
   "name": "container-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP server for Apple containers - run AI agents in VM-isolated sandboxes on your Mac",
   "type": "module",
   "bin": { "container-mcp": "dist/index.js" },

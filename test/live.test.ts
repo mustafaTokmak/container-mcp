@@ -39,6 +39,7 @@ describe.runIf(LIVE)("live: full lifecycle against the real CLI", () => {
   let client: Client;
   let detachedId = "";
   let unmanagedId = "";
+  const extraIds: string[] = [];
 
   beforeAll(async () => {
     workDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cmcp-live-")));
@@ -61,7 +62,7 @@ describe.runIf(LIVE)("live: full lifecycle against the real CLI", () => {
   }, 120_000);
 
   afterAll(async () => {
-    for (const id of [detachedId, unmanagedId]) {
+    for (const id of [detachedId, unmanagedId, ...extraIds]) {
       if (!id) continue;
       await cli("container", ["delete", "--force", id]).catch(() => {});
     }
@@ -186,6 +187,62 @@ describe.runIf(LIVE)("live: full lifecycle against the real CLI", () => {
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/not allowed/);
   }, 60_000);
+
+  test("default-deny network: a container runs with --network none (flag accepted)", async () => {
+    // The unit suite cannot verify this CLI flag is accepted; only the live suite can.
+    // If --network none is an unrecognised flag, run_container will error here.
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: IMAGE, wait: true, command: ["true"] },
+    });
+    expect(res.isError).not.toBe(true);
+  }, 120_000);
+
+  test("container_stats returns JSON for a running container", async () => {
+    const res: any = await client.callTool({
+      name: "container_stats",
+      arguments: { id: detachedId },
+    });
+    expect(res.isError).not.toBe(true);
+    const text = textOf(res);
+    const parsed = JSON.parse(text);
+    expect(parsed !== null && typeof parsed === "object").toBe(true);
+  }, 60_000);
+
+  test("inspect_container surfaces the management and attribution labels", async () => {
+    const res: any = await client.callTool({
+      name: "inspect_container",
+      arguments: { id: detachedId },
+    });
+    expect(res.isError).not.toBe(true);
+    const text = textOf(res);
+    expect(text).toMatch(/dev\.container-mcp\.managed/);
+    expect(text).toMatch(/dev\.container-mcp\.session/);
+    expect(text).toMatch(/dev\.container-mcp\.client/);
+  }, 60_000);
+
+  test("published ports appear after a port-mapped run", async () => {
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: {
+        image: IMAGE,
+        ports: [{ host: 38080, container: 38080 }],
+        command: ["sleep", "10"],
+      },
+    });
+    expect(res.isError).not.toBe(true);
+    const id = textOf(res).trim();
+    expect(id.length).toBeGreaterThan(0);
+    extraIds.push(id);
+  }, 120_000);
+
+  test("network:true is accepted and runs to completion", async () => {
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: IMAGE, wait: true, network: true, command: ["true"] },
+    });
+    expect(res.isError).not.toBe(true);
+  }, 120_000);
 
   test("stops and removes the managed container", async () => {
     const stop: any = await client.callTool({

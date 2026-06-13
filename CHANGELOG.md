@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-06-13
+
+Engine round: network egress control, attribution labels, structured results,
+two new read tools, port publishing, and image lifecycle tools. 15 tools total.
+
+### Security
+
+- Containers now have NO outbound network by default (`--network none`). Opt in
+  globally via `CONTAINER_MCP_ALLOW_NETWORK=1` or per run with `network: true`.
+
+### Added
+
+- Per-session and per-client attribution labels (`dev.container-mcp.session`,
+  `dev.container-mcp.client`) stamped on every created container so concurrent
+  agents can be tracked independently.
+- Structured `{exitCode, stdout, stderr}` results for `run_container` wait-mode
+  and `exec_in_container`.
+- `container_stats` tool: snapshot CPU, memory, and I/O for a running container
+  as JSON (`container stats --no-stream --format json`).
+- `inspect_container` tool: full container detail (configuration, mounts, labels,
+  network, status) as JSON.
+- Port publishing on `run_container` via the `ports` input
+  (`{host, container, protocol}`), mapped to `--publish`.
+- `remove_image` tool: delete a local image by reference (supports `--force`).
+- `prune_images` tool: remove dangling (or all unused) images to reclaim disk.
+
+### Changed
+
+- README install section updated to from-source instructions until npm publish.
+
 ## [0.1.1] - 2026-06-12
 
 Security and robustness hardening following a multi-model code review. No
@@ -59,5 +89,6 @@ Initial implementation (tagged, not published).
 - Management labels (`dev.container-mcp.managed`, `dev.container-mcp.agent`)
   on every created container.
 
+[0.1.2]: https://github.com/mustafaTokmak/container-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/mustafaTokmak/container-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mustafaTokmak/container-mcp/releases/tag/v0.1.0

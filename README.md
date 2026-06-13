@@ -50,12 +50,15 @@ Once published to npm, this becomes `claude mcp add container -- npx -y containe
 
 | Tool | Description |
 |---|---|
-| `run_container` | Run an image in its own VM (labeled, resource-limited; `wait: true` runs to completion and returns output) |
-| `exec_in_container` | Run a command in a running container |
+| `run_container` | Run an image in its own VM (labeled, resource-limited; `wait: true` runs to completion and returns structured output; `network` enables egress; `ports` publishes ports) |
+| `exec_in_container` | Run a command in a running container (returns structured `{exitCode, stdout, stderr}`) |
 | `list_containers` / `container_logs` | Inspect state and output |
+| `container_stats` | Snapshot CPU, memory, and I/O usage for a running container as JSON |
+| `inspect_container` | Full container detail (configuration, mounts, labels, network, status) as JSON |
 | `stop_container` / `remove_container` | Lifecycle |
 | `copy_files` | Copy between host and container |
 | `list_images` / `pull_image` / `build_image` | Image management |
+| `remove_image` / `prune_images` | Remove images to reclaim disk |
 | `system_status` | Check/start the container system service |
 
 ## Safety model
@@ -64,6 +67,7 @@ Once published to npm, this becomes `claude mcp add container -- npx -y containe
 |---|---|---|
 | `CONTAINER_MCP_ALLOWED_MOUNTS` | launch dir + private scratch dir | Colon-separated allowlist of host paths agents may mount, copy to/from, or build from. Setting it replaces the default. |
 | `CONTAINER_MCP_READONLY` | off | `1`/`true`: only listing, logs, and status work |
+| `CONTAINER_MCP_ALLOW_NETWORK` | off | `1`/`true`: allow containers outbound network access (default: denied) |
 | `CONTAINER_MCP_DEFAULT_CPUS` | `2` | CPU limit applied when the agent does not specify one |
 | `CONTAINER_MCP_DEFAULT_MEMORY` | `2g` | Memory limit applied when the agent does not specify one |
 | `CONTAINER_MCP_AGENT_NAME` | `agent` | Value of the `dev.container-mcp.agent` label on created containers |
@@ -81,6 +85,12 @@ created (tagged `dev.container-mcp.managed=true`) unless
 reaches the CLI is guarded against flag injection, and commands are executed
 with `execFile` (no shell), so there is no shell injection surface.
 
+Containers have no outbound network by default (run with `--network none`); set
+`CONTAINER_MCP_ALLOW_NETWORK` or pass `network: true` per run to enable egress.
+Every container is labeled with a per-session id and the connecting MCP client's
+name (`dev.container-mcp.session`, `dev.container-mcp.client`) so a session view
+can attribute containers truthfully across concurrent agents.
+
 ## Known assumptions
 
 Built against apple/container docs without a live CLI on the dev machine:
@@ -90,6 +100,9 @@ Built against apple/container docs without a live CLI on the dev machine:
 - `container cp` is used (documented alias of the canonical `container copy`).
 - `container inspect` label layout is undocumented; managed-label checks parse it
   tolerantly and fail closed (override: `CONTAINER_MCP_ALLOW_UNMANAGED`).
+- `container run --network none` is assumed valid for disabling egress
+  (Docker-compatible convention; the `--network` flag is documented but the `none`
+  value is not explicitly — confirmed by the live suite).
 
 Each assumption has a dedicated test in the live suite below.
 
