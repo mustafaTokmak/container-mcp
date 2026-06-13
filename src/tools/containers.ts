@@ -266,6 +266,46 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
   );
 
   server.registerTool(
+    "container_stats",
+    {
+      title: "Container stats",
+      description: "Snapshot CPU, memory, and I/O usage for a container as JSON.",
+      inputSchema: { id: z.string().min(1).describe("Container ID or name") },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ id }) => {
+      try {
+        const safeId = assertSafeCliValue(id, "container id");
+        await ensureManaged(ctx, safeId);
+        const res = await ctx.run(["stats", "--no-stream", "--format", "json", safeId]);
+        return ok(res.stdout.trim() || "{}");
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  server.registerTool(
+    "inspect_container",
+    {
+      title: "Inspect container",
+      description: "Full container details (configuration, mounts, labels, network, status) as JSON.",
+      inputSchema: { id: z.string().min(1).describe("Container ID or name") },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ id }) => {
+      try {
+        const safeId = assertSafeCliValue(id, "container id");
+        await ensureManaged(ctx, safeId);
+        const res = await ctx.run(["inspect", safeId]);
+        return ok(res.stdout.trim() || "{}");
+      } catch (err) {
+        return fail(err);
+      }
+    }
+  );
+
+  server.registerTool(
     "copy_files",
     {
       title: "Copy files",

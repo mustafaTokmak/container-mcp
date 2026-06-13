@@ -9,7 +9,7 @@ describe("createServer", () => {
     expect(VERSION).toBe(pkg.version);
   });
 
-  test("registers all 11 tools", async () => {
+  test("registers all 13 tools", async () => {
     const runner = makeFakeRunner();
     const client = await connect(createServer({ run: runner.run, config: makeConfig() }));
     const tools = await client.listTools();
@@ -17,8 +17,10 @@ describe("createServer", () => {
       [
         "build_image",
         "container_logs",
+        "container_stats",
         "copy_files",
         "exec_in_container",
+        "inspect_container",
         "list_containers",
         "list_images",
         "pull_image",
@@ -37,7 +39,7 @@ describe("createServer", () => {
     expect(res.content[0].text).toBe('[{"id":"e2e"}]');
   });
 
-  test("accepts sessionId and getClient overrides and still registers 11 tools", async () => {
+  test("accepts sessionId and getClient overrides and still registers 13 tools", async () => {
     const runner = makeFakeRunner();
     const client = await connect(
       createServer({
@@ -48,6 +50,6 @@ describe("createServer", () => {
       })
     );
     const tools = await client.listTools();
-    expect(tools.tools).toHaveLength(11);
+    expect(tools.tools).toHaveLength(13);
   });
 });
