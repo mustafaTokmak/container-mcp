@@ -81,6 +81,22 @@ Built against apple/container docs without a live CLI on the dev machine:
 - `container inspect` label layout is undocumented; managed-label checks parse it
   tolerantly and fail closed (override: `CONTAINER_MCP_ALLOW_UNMANAGED`).
 
+Each assumption has a dedicated test in the live suite below.
+
+## Development
+
+```bash
+npm install
+npm test          # unit + integration suite; no container CLI required
+npm run build
+```
+
+`CONTAINER_MCP_LIVE=1 npm test` additionally runs the live end-to-end suite
+([test/live.test.ts](test/live.test.ts)), which requires the container CLI,
+pulls `alpine:latest`, and creates real containers. It is the pre-release
+gate that verifies the known assumptions above against real hardware. CI
+runs the regular suite on macOS for every push.
+
 ## License
 
 MIT
