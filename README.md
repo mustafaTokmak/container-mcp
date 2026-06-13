@@ -1,5 +1,8 @@
 # container-mcp
 
+[![CI](https://github.com/mustafaTokmak/container-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mustafaTokmak/container-mcp/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **Run AI agents in VM-isolated sandboxes on your Mac.**
 
 An MCP server for [Apple containers](https://github.com/apple/container) — every
