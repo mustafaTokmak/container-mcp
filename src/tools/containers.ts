@@ -116,9 +116,10 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           .describe("Environment variables"),
         workdir: z.string().min(1).optional().describe("Working directory inside the container"),
         wait: z.boolean().optional().describe("Run to completion and return the container's output instead of its ID (10 minute limit)"),
+        network: z.boolean().optional().describe("Allow outbound network access (default: denied unless CONTAINER_MCP_ALLOW_NETWORK is set)"),
       },
     },
-    async ({ image, name, command, mounts, cpus, memory, env, workdir, wait }) => {
+    async ({ image, name, command, mounts, cpus, memory, env, workdir, wait, network }) => {
       try {
         ensureWritable(ctx.config, "run_container");
 
@@ -138,6 +139,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const safeCpus = assertSafeCliValue(cpus ?? ctx.config.defaultCpus, "cpus");
         const safeMemory = assertSafeCliValue(memory ?? ctx.config.defaultMemory, "memory");
         if (command?.length) assertSafeCliValue(command[0], "command");
+        const networkAllowed = (network ?? ctx.config.allowNetwork) === true;
         const args = ["run"];
         if (!wait) args.push("--detach");
         args.push(
@@ -145,6 +147,9 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           safeCpus,
           "--memory",
           safeMemory,
+        );
+        if (!networkAllowed) args.push("--network", "none");
+        args.push(
           "--label",
           MANAGED_LABEL,
           "--label",

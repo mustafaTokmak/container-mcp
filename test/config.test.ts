@@ -116,4 +116,22 @@ describe("loadConfig", () => {
     const cfg2 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_UNMANAGED: "TRUE" }, "/x");
     expect(cfg2.allowUnmanaged).toBe(true);
   });
+
+  test("allowNetwork defaults to false", () => {
+    const cfg = loadConfigWithCleanup({}, "/x");
+    expect(cfg.allowNetwork).toBe(false);
+  });
+
+  test("allowNetwork accepts 1 and true case-insensitively", () => {
+    const cfg1 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_NETWORK: "1" }, "/x");
+    expect(cfg1.allowNetwork).toBe(true);
+    const cfg2 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_NETWORK: "true" }, "/x");
+    expect(cfg2.allowNetwork).toBe(true);
+    const cfg3 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_NETWORK: "TRUE" }, "/x");
+    expect(cfg3.allowNetwork).toBe(true);
+    const cfg4 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_NETWORK: "no" }, "/x");
+    expect(cfg4.allowNetwork).toBe(false);
+    const cfg5 = loadConfigWithCleanup({ CONTAINER_MCP_ALLOW_NETWORK: "" }, "/x");
+    expect(cfg5.allowNetwork).toBe(false);
+  });
 });

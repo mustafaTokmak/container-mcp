@@ -14,6 +14,7 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     agentName: "claude",
     maxContainers: 10,
     allowUnmanaged: false,
+    allowNetwork: false,
     ...overrides,
   };
 }

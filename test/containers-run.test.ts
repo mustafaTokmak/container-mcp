@@ -35,6 +35,8 @@ describe("run_container", () => {
       "2",
       "--memory",
       "2g",
+      "--network",
+      "none",
       "--label",
       "dev.container-mcp.managed=true",
       "--label",
@@ -239,5 +241,72 @@ describe("run_container", () => {
     });
     expect(res.isError).toBe(true);
     expect(runner.calls.length).toBe(1);
+  });
+
+  describe("network", () => {
+    test("denies network by default (adds --network none)", async () => {
+      const { runner, client } = await setup([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      await client.callTool({
+        name: "run_container",
+        arguments: { image: "alpine" },
+      });
+      const args = runner.calls[1];
+      const netIdx = args.indexOf("--network");
+      expect(netIdx).toBeGreaterThan(-1);
+      expect(args[netIdx + 1]).toBe("none");
+    });
+
+    test("allows network when per-call network:true", async () => {
+      const { runner, client } = await setup([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      await client.callTool({
+        name: "run_container",
+        arguments: { image: "alpine", network: true },
+      });
+      const args = runner.calls[1];
+      const netIdx = args.indexOf("--network");
+      // --network none must not appear; no --network flag at all is the allowed state
+      expect(netIdx === -1 || args[netIdx + 1] !== "none").toBe(true);
+    });
+
+    test("allows network when CONTAINER_MCP_ALLOW_NETWORK config is set", async () => {
+      const { runner, client } = await setup(
+        [
+          { stdout: "[]", stderr: "" },
+          { stdout: "abc123\n", stderr: "" },
+        ],
+        { allowNetwork: true }
+      );
+      await client.callTool({
+        name: "run_container",
+        arguments: { image: "alpine" },
+      });
+      const args = runner.calls[1];
+      const netIdx = args.indexOf("--network");
+      expect(netIdx === -1 || args[netIdx + 1] !== "none").toBe(true);
+    });
+
+    test("per-call network:false overrides allowNetwork config", async () => {
+      const { runner, client } = await setup(
+        [
+          { stdout: "[]", stderr: "" },
+          { stdout: "abc123\n", stderr: "" },
+        ],
+        { allowNetwork: true }
+      );
+      await client.callTool({
+        name: "run_container",
+        arguments: { image: "alpine", network: false },
+      });
+      const args = runner.calls[1];
+      const netIdx = args.indexOf("--network");
+      expect(netIdx).toBeGreaterThan(-1);
+      expect(args[netIdx + 1]).toBe("none");
+    });
   });
 });

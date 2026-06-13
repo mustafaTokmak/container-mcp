@@ -11,6 +11,7 @@ export interface Config {
   agentName: string;
   maxContainers: number;
   allowUnmanaged: boolean;
+  allowNetwork: boolean;
 }
 
 export const MANAGED_LABEL = "dev.container-mcp.managed=true";
@@ -56,5 +57,6 @@ export function loadConfig(
     agentName: env.CONTAINER_MCP_AGENT_NAME ?? "agent",
     maxContainers,
     allowUnmanaged: /^(1|true)$/i.test(env.CONTAINER_MCP_ALLOW_UNMANAGED ?? ""),
+    allowNetwork: /^(1|true)$/i.test(env.CONTAINER_MCP_ALLOW_NETWORK ?? ""),
   };
 }
