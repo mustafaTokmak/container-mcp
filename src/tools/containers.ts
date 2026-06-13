@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ok, fail, type ToolContext } from "./util.js";
+import { ok, fail, okStructured, failStructured, type ToolContext } from "./util.js";
 import { assertSafeCliValue, ensureWritable, validateHostPath, validateExistingHostPath, SafetyError } from "../safety.js";
+import { CliError } from "../cli.js";
 import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
 
 const isContainerPath = (p: string) => /^[A-Za-z0-9][A-Za-z0-9_.-]*:/.test(p);
@@ -178,11 +179,14 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         args.push(safeImage, ...(command ?? []));
         if (wait) {
           const res = await ctx.run(args, { timeoutMs: 600_000 });
-          return ok(res.stdout.trim() || "(no output)");
+          return okStructured(res.stdout.trim() || "(no output)", { exitCode: 0, stdout: res.stdout, stderr: res.stderr });
         }
         const res = await ctx.run(args);
         return ok(res.stdout.trim());
       } catch (err) {
+        if (err instanceof CliError) {
+          return failStructured(err.message, { exitCode: err.exitCode ?? null, stdout: err.stdout, stderr: err.stderr });
+        }
         return fail(err);
       }
     }
@@ -251,8 +255,11 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const safeId = assertSafeCliValue(id, "container id");
         await ensureManaged(ctx, safeId);
         const res = await ctx.run(["exec", safeId, "--", ...command]);
-        return ok(res.stdout.trim());
+        return okStructured(res.stdout.trim(), { exitCode: 0, stdout: res.stdout, stderr: res.stderr });
       } catch (err) {
+        if (err instanceof CliError) {
+          return failStructured(err.message, { exitCode: err.exitCode ?? null, stdout: err.stdout, stderr: err.stderr });
+        }
         return fail(err);
       }
     }

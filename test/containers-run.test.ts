@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { registerContainerTools } from "../src/tools/containers.js";
 import { makeConfig, makeFakeRunner, makeServer, connect } from "./helpers.js";
+import { CliError } from "../src/cli.js";
 
 function textOf(res: any): string {
   return res.content[0].text;
@@ -250,6 +251,33 @@ describe("run_container", () => {
     });
     expect(res.isError).toBe(true);
     expect(runner.calls.length).toBe(1);
+  });
+
+  test("wait mode returns structured exitCode/stdout/stderr on success", async () => {
+    const { client } = await setup([
+      { stdout: "[]", stderr: "" },
+      { stdout: "47 passing\n", stderr: "warn\n" },
+    ]);
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: "node:20", wait: true, command: ["npm", "test"] },
+    });
+    expect(textOf(res)).toBe("47 passing");
+    expect(res.structuredContent).toEqual({ exitCode: 0, stdout: "47 passing\n", stderr: "warn\n" });
+  });
+
+  test("wait mode surfaces non-zero exit as structured failure", async () => {
+    const e = new CliError("container run ... failed (exit 1): boom");
+    e.exitCode = 1;
+    e.stdout = "1 failing\n";
+    e.stderr = "boom\n";
+    const { client } = await setup([{ stdout: "[]", stderr: "" }, e]);
+    const res: any = await client.callTool({
+      name: "run_container",
+      arguments: { image: "node:20", wait: true, command: ["npm", "test"] },
+    });
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent).toMatchObject({ exitCode: 1, stdout: "1 failing\n", stderr: "boom\n" });
   });
 
   describe("network", () => {

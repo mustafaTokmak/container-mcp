@@ -116,4 +116,18 @@ describe("createCliRunner", () => {
     const caught = await run(["images", "pull", "ubuntu"]).catch((e) => e);
     expect(caught.message).toMatch(/CONTAINER_MCP_TIMEOUT_MS/);
   });
+
+  test("non-zero exit CliError exposes .stdout and .stderr fields", async () => {
+    const err = Object.assign(new Error("exit 2"), {
+      code: 2,
+      stdout: "partial output\n",
+      stderr: "command not found",
+    });
+    const run = createCliRunner(fakeExec(err).fn);
+    const caught = await run(["exec", "c1", "--", "badcmd"]).catch((e) => e);
+    expect(caught).toBeInstanceOf(CliError);
+    expect(caught.exitCode).toBe(2);
+    expect(caught.stdout).toBe("partial output\n");
+    expect(caught.stderr).toBe("command not found");
+  });
 });

@@ -14,6 +14,8 @@ export type CliRunner = (args: string[], opts?: RunOptions) => Promise<CliResult
 
 export class CliError extends Error {
   exitCode?: number;
+  stdout: string = "";
+  stderr: string = "";
 
   constructor(message: string, hint?: string) {
     super(hint ? `${message}\n${hint}` : message);
@@ -78,20 +80,23 @@ export function createCliRunner(execFn: ExecFn = defaultExec): CliRunner {
             `Output exceeded 10MB. For logs, use the tail parameter.`
         );
       }
-      const stderr = (e.stderr || e.message || "").trim();
-      const stdoutTail = (e.stdout ?? "").trim().slice(-2000);
-      const hint = /not running|connection|XPC|daemon|apiserver/i.test(stderr)
+      const rawStderr = (e.stderr || e.message || "").trim();
+      const rawStdout = e.stdout ?? "";
+      const stdoutTail = rawStdout.trim().slice(-2000);
+      const hint = /not running|connection|XPC|daemon|apiserver/i.test(rawStderr)
         ? SERVICE_HINT
         : undefined;
       const exitCodePart = typeof e.code === "number" ? ` (exit ${e.code})` : "";
       const stdoutPart = stdoutTail ? `\nstdout (last 2000 chars):\n${stdoutTail}` : "";
       const cliErr = new CliError(
-        `container ${args.join(" ")} failed${exitCodePart}: ${stderr}${stdoutPart}`,
+        `container ${args.join(" ")} failed${exitCodePart}: ${rawStderr}${stdoutPart}`,
         hint
       );
       if (typeof e.code === "number") {
         cliErr.exitCode = e.code;
       }
+      cliErr.stdout = rawStdout;
+      cliErr.stderr = rawStderr;
       throw cliErr;
     }
   };

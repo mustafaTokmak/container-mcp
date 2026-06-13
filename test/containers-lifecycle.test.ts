@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { registerContainerTools } from "../src/tools/containers.js";
 import { makeConfig, makeFakeRunner, makeServer, connect, MANAGED_INSPECT, UNMANAGED_INSPECT } from "./helpers.js";
+import { CliError } from "../src/cli.js";
 
 function textOf(res: any): string {
   return res.content[0].text;
@@ -83,6 +84,32 @@ describe("exec_in_container", () => {
       arguments: { id: "abc", command: ["rm", "-rf", "/"] },
     });
     expect(res.isError).toBe(true);
+  });
+
+  test("exec returns structured result on success", async () => {
+    const { runner, client } = await setup([MANAGED_INSPECT, { stdout: "hello\n", stderr: "note\n" }]);
+    const res: any = await client.callTool({
+      name: "exec_in_container",
+      arguments: { id: "abc", command: ["echo", "hello"] },
+    });
+    expect(textOf(res)).toBe("hello");
+    expect(res.structuredContent).toEqual({ exitCode: 0, stdout: "hello\n", stderr: "note\n" });
+    expect(runner.calls[0]).toEqual(["inspect", "abc"]);
+    expect(runner.calls[1]).toEqual(["exec", "abc", "--", "echo", "hello"]);
+  });
+
+  test("exec surfaces non-zero exit as structured failure", async () => {
+    const e = new CliError("container exec abc -- badcmd failed (exit 2): not found");
+    e.exitCode = 2;
+    e.stdout = "";
+    e.stderr = "not found\n";
+    const { client } = await setup([MANAGED_INSPECT, e]);
+    const res: any = await client.callTool({
+      name: "exec_in_container",
+      arguments: { id: "abc", command: ["badcmd"] },
+    });
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent).toMatchObject({ exitCode: 2, stdout: "", stderr: "not found\n" });
   });
 });
 
