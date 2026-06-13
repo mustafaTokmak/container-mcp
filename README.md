@@ -3,22 +3,28 @@
 [![CI](https://github.com/mustafaTokmak/container-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mustafaTokmak/container-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Run AI agents in VM-isolated sandboxes on your Mac.**
+**Run AI agents in real VM sandboxes on your Mac — fully local, safe by default.**
 
 An MCP server for [Apple containers](https://github.com/apple/container) — every
-container gets its own lightweight VM, which makes it the right isolation
-boundary for code an AI agent wrote five seconds ago.
+container gets its own VM, which makes it the right isolation boundary for code
+an AI agent wrote five seconds ago. No daemon, no account, no cloud.
 
 > Part of a larger toolkit: a native macOS "mission control" GUI for agent
 > sandboxes is in development.
 
 ## Why
 
-- **VM-per-container isolation** — stronger than Docker's shared-kernel model
-- **Safe by default** — agents can only mount the project directory and temp;
-  everything else requires an explicit allowlist
+- **Real VM isolation, per container** — each sandbox gets its own kernel via
+  Apple's container runtime: the right boundary for agent-written code, not a
+  shared-kernel namespace
+- **Local-first and private** — no daemon, no account, no cloud; network is
+  denied by default, so nothing leaves your Mac unless you allow it
+- **Safe by default, and visible** — explicit mount allowlist, default-deny
+  network, and managed-label scoping; the boundary is meant to be seen, not
+  buried in config
 - **Self-healing errors** — every failure tells the agent how to fix it
-- **Agent-labeled** — every container is tagged with which agent created it
+- **Agent-aware** — every container is labeled with the session and client that
+  created it
 
 ## Install
 
