@@ -347,6 +347,59 @@ describe("run_container", () => {
     });
   });
 
+  describe("ports", () => {
+    test("publishes a port", async () => {
+      const { runner, client } = await setup([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      await client.callTool({
+        name: "run_container",
+        arguments: { image: "alpine", ports: [{ host: 3000, container: 3000 }] },
+      });
+      const args = runner.calls[1];
+      const idx = args.indexOf("--publish");
+      expect(idx).toBeGreaterThan(-1);
+      expect(args[idx + 1]).toBe("3000:3000");
+    });
+
+    test("supports protocol and multiple ports", async () => {
+      const { runner, client } = await setup([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      await client.callTool({
+        name: "run_container",
+        arguments: {
+          image: "alpine",
+          ports: [
+            { host: 8080, container: 80, protocol: "udp" },
+            { host: 443, container: 443 },
+          ],
+        },
+      });
+      const args = runner.calls[1];
+      const idx1 = args.indexOf("--publish");
+      expect(idx1).toBeGreaterThan(-1);
+      expect(args[idx1 + 1]).toBe("8080:80/udp");
+      const idx2 = args.indexOf("--publish", idx1 + 1);
+      expect(idx2).toBeGreaterThan(-1);
+      expect(args[idx2 + 1]).toBe("443:443");
+    });
+
+    test("rejects an out-of-range port at the schema layer", async () => {
+      const { runner, client } = await setup();
+      const res: any = await client
+        .callTool({
+          name: "run_container",
+          arguments: { image: "alpine", ports: [{ host: 70000, container: 80 }] },
+        })
+        .catch(() => ({ isError: true }));
+      expect(res.isError).toBe(true);
+      expect(runner.calls.length).toBe(0);
+    });
+  });
+
   describe("attribution", () => {
     test("stamps session and client labels", async () => {
       const { runner, client } = await setup([

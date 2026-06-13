@@ -118,9 +118,19 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         workdir: z.string().min(1).optional().describe("Working directory inside the container"),
         wait: z.boolean().optional().describe("Run to completion and return the container's output instead of its ID (10 minute limit)"),
         network: z.boolean().optional().describe("Allow outbound network access (default: denied unless CONTAINER_MCP_ALLOW_NETWORK is set)"),
+        ports: z
+          .array(
+            z.object({
+              host: z.number().int().min(1).max(65535).describe("Host port"),
+              container: z.number().int().min(1).max(65535).describe("Container port"),
+              protocol: z.enum(["tcp", "udp"]).optional().describe("Protocol (default tcp)"),
+            })
+          )
+          .optional()
+          .describe("Publish container ports to the host"),
       },
     },
-    async ({ image, name, command, mounts, cpus, memory, env, workdir, wait, network }) => {
+    async ({ image, name, command, mounts, cpus, memory, env, workdir, wait, network, ports }) => {
       try {
         ensureWritable(ctx.config, "run_container");
 
@@ -175,6 +185,10 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
             throw new SafetyError(`Invalid env variable name: ${JSON.stringify(key)}`);
           }
           args.push("--env", `${key}=${value}`);
+        }
+        for (const p of ports ?? []) {
+          const value = `${p.host}:${p.container}${p.protocol ? `/${p.protocol}` : ""}`;
+          args.push("--publish", value);
         }
         args.push(safeImage, ...(command ?? []));
         if (wait) {
