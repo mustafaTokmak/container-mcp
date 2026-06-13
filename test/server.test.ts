@@ -36,4 +36,18 @@ describe("createServer", () => {
     const res: any = await client.callTool({ name: "list_containers", arguments: {} });
     expect(res.content[0].text).toBe('[{"id":"e2e"}]');
   });
+
+  test("accepts sessionId and getClient overrides and still registers 11 tools", async () => {
+    const runner = makeFakeRunner();
+    const client = await connect(
+      createServer({
+        run: runner.run,
+        config: makeConfig(),
+        sessionId: "s",
+        getClient: () => "c",
+      })
+    );
+    const tools = await client.listTools();
+    expect(tools.tools).toHaveLength(11);
+  });
 });

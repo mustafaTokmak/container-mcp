@@ -12,7 +12,12 @@ function textOf(res: any): string {
 async function setup(results: any[] = [], cfgOverrides = {}) {
   const runner = makeFakeRunner(results);
   const server = makeServer();
-  registerContainerTools(server, { run: runner.run, config: makeConfig(cfgOverrides) });
+  registerContainerTools(server, {
+    run: runner.run,
+    config: makeConfig(cfgOverrides),
+    sessionId: "test-session",
+    getClient: () => "test-client",
+  });
   const client = await connect(server);
   return { runner, client };
 }
@@ -41,6 +46,10 @@ describe("run_container", () => {
       "dev.container-mcp.managed=true",
       "--label",
       "dev.container-mcp.agent=claude",
+      "--label",
+      "dev.container-mcp.session=test-session",
+      "--label",
+      "dev.container-mcp.client=test-client",
       "alpine:latest",
     ]);
   });
@@ -307,6 +316,51 @@ describe("run_container", () => {
       const netIdx = args.indexOf("--network");
       expect(netIdx).toBeGreaterThan(-1);
       expect(args[netIdx + 1]).toBe("none");
+    });
+  });
+
+  describe("attribution", () => {
+    test("stamps session and client labels", async () => {
+      const { runner, client } = await setup([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      await client.callTool({ name: "run_container", arguments: { image: "alpine" } });
+      const args = runner.calls[1];
+      const sessionIdx = args.indexOf("dev.container-mcp.session=test-session");
+      expect(sessionIdx).toBeGreaterThan(-1);
+      expect(args[sessionIdx - 1]).toBe("--label");
+      const clientIdx = args.indexOf("dev.container-mcp.client=test-client");
+      expect(clientIdx).toBeGreaterThan(-1);
+      expect(args[clientIdx - 1]).toBe("--label");
+      // session label appears before client label
+      expect(sessionIdx).toBeLessThan(clientIdx);
+    });
+
+    test("sanitizes a client name with unsafe characters", async () => {
+      const runner = makeFakeRunner([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      const server = makeServer();
+      registerContainerTools(server, {
+        run: runner.run,
+        config: makeConfig(),
+        sessionId: "test-session",
+        getClient: () => "Claude Code/1.0 (x=y)",
+      });
+      const client = await connect(server);
+      await client.callTool({ name: "run_container", arguments: { image: "alpine" } });
+      const args = runner.calls[1];
+      const clientLabelIdx = args.findIndex((a) => a.startsWith("dev.container-mcp.client="));
+      expect(clientLabelIdx).toBeGreaterThan(-1);
+      const labelValue = args[clientLabelIdx].slice("dev.container-mcp.client=".length);
+      // Must only contain [A-Za-z0-9._-]
+      expect(/^[A-Za-z0-9._-]+$/.test(labelValue)).toBe(true);
+      // No spaces, slashes, or equals signs
+      expect(labelValue).not.toContain(" ");
+      expect(labelValue).not.toContain("/");
+      expect(labelValue).not.toContain("=");
     });
   });
 });

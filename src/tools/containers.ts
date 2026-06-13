@@ -149,11 +149,16 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           safeMemory,
         );
         if (!networkAllowed) args.push("--network", "none");
+        const safeClient = ctx.getClient().replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 64) || "unknown";
         args.push(
           "--label",
           MANAGED_LABEL,
           "--label",
           `${AGENT_LABEL_KEY}=${ctx.config.agentName}`,
+          "--label",
+          `dev.container-mcp.session=${ctx.sessionId}`,
+          "--label",
+          `dev.container-mcp.client=${safeClient}`,
         );
         if (workdir) args.push("--workdir", assertSafeCliValue(workdir, "workdir"));
         if (name) args.push("--name", assertSafeCliValue(name, "container name"));

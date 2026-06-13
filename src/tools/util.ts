@@ -5,6 +5,8 @@ import type { Config } from "../config.js";
 export interface ToolContext {
   run: CliRunner;
   config: Config;
+  sessionId: string;
+  getClient: () => string;
 }
 
 export function ok(text: string): CallToolResult {

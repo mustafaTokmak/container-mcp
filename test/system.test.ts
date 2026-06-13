@@ -10,7 +10,7 @@ describe("system_status", () => {
   test("reports status from the CLI", async () => {
     const runner = makeFakeRunner([{ stdout: "apiserver is running\n", stderr: "" }]);
     const server = makeServer();
-    registerSystemTools(server, { run: runner.run, config: makeConfig() });
+    registerSystemTools(server, { run: runner.run, config: makeConfig(), sessionId: "test-session", getClient: () => "test-client" });
     const client = await connect(server);
 
     const res = await client.callTool({ name: "system_status", arguments: {} });
@@ -21,7 +21,7 @@ describe("system_status", () => {
   test("returns the error when status fails and start is not requested", async () => {
     const runner = makeFakeRunner([new Error("service not running")]);
     const server = makeServer();
-    registerSystemTools(server, { run: runner.run, config: makeConfig() });
+    registerSystemTools(server, { run: runner.run, config: makeConfig(), sessionId: "test-session", getClient: () => "test-client" });
     const client = await connect(server);
 
     const res: any = await client.callTool({ name: "system_status", arguments: {} });
@@ -32,7 +32,7 @@ describe("system_status", () => {
   test("starts the service when start: true and status fails", async () => {
     const runner = makeFakeRunner([new Error("down"), { stdout: "", stderr: "" }]);
     const server = makeServer();
-    registerSystemTools(server, { run: runner.run, config: makeConfig() });
+    registerSystemTools(server, { run: runner.run, config: makeConfig(), sessionId: "test-session", getClient: () => "test-client" });
     const client = await connect(server);
 
     const res = await client.callTool({ name: "system_status", arguments: { start: true } });
@@ -43,7 +43,7 @@ describe("system_status", () => {
   test("read-only mode refuses to start the service", async () => {
     const runner = makeFakeRunner([new Error("down")]);
     const server = makeServer();
-    registerSystemTools(server, { run: runner.run, config: makeConfig({ readOnly: true }) });
+    registerSystemTools(server, { run: runner.run, config: makeConfig({ readOnly: true }), sessionId: "test-session", getClient: () => "test-client" });
     const client = await connect(server);
 
     const res: any = await client.callTool({ name: "system_status", arguments: { start: true } });

@@ -9,7 +9,12 @@ function textOf(res: any): string {
 async function setup(results: any[] = [], cfgOverrides = {}) {
   const runner = makeFakeRunner(results);
   const server = makeServer();
-  registerContainerTools(server, { run: runner.run, config: makeConfig(cfgOverrides) });
+  registerContainerTools(server, {
+    run: runner.run,
+    config: makeConfig(cfgOverrides),
+    sessionId: "test-session",
+    getClient: () => "test-client",
+  });
   const client = await connect(server);
   return { runner, client };
 }
