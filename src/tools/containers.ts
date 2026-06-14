@@ -271,7 +271,12 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         ensureWritable(ctx.config, "exec_in_container");
         const safeId = assertSafeCliValue(id, "container id");
         await ensureManaged(ctx, safeId);
-        const res = await ctx.run(["exec", safeId, "--", ...command]);
+        // Apple `container exec` captures everything after the container id as the
+        // process argv verbatim — NO `--` terminator (passing one makes "--" the target
+        // executable and fails). Verified on macOS 26: leading-dash command tokens are
+        // treated as literal executable/args and fail closed, never as exec options, so
+        // dropping `--` does not open a flag-injection path.
+        const res = await ctx.run(["exec", safeId, ...command]);
         return okStructured(res.stdout.trim(), { exitCode: 0, stdout: res.stdout, stderr: res.stderr });
       } catch (err) {
         if (err instanceof CliError) {

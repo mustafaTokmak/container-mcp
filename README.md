@@ -149,20 +149,21 @@ Every container is labeled with a per-session id and the connecting MCP client's
 name (`dev.container-mcp.session`, `dev.container-mcp.client`) so a session view
 can attribute containers truthfully across concurrent agents.
 
-## Known assumptions
+## Verified against the real CLI
 
-Built against apple/container docs without a live CLI on the dev machine:
+These were doc-only assumptions; the live suite now runs against container 1.0.0 on
+macOS 26 and confirms (or corrected) each:
 
-- `container exec` is invoked with a `--` terminator before the agent's command
-  (standard swift-argument-parser convention, not explicitly documented).
-- `container cp` is used (documented alias of the canonical `container copy`).
-- `container inspect` label layout is undocumented; managed-label checks parse it
-  tolerantly and fail closed (override: `CONTAINER_MCP_ALLOW_UNMANAGED`).
-- `container run --network none` is assumed valid for disabling egress
-  (Docker-compatible convention; the `--network` flag is documented but the `none`
-  value is not explicitly — confirmed by the live suite).
+- `container exec` takes **no** `--` terminator — Apple captures everything after the
+  container id as the process argv verbatim (passing `--` makes `--` the target
+  executable and fails). Corrected 2026-06-14; a leading-dash command token is treated
+  as a literal executable and fails closed, so dropping `--` opens no flag-injection path.
+- `container cp` round-trips a file host → container → host. ✅ confirmed.
+- `container inspect` nests labels under `configuration.labels`; managed-label checks
+  parse it tolerantly and fail closed (override: `CONTAINER_MCP_ALLOW_UNMANAGED`). ✅ confirmed.
+- `container run --network none` disables egress (the `none` value is accepted). ✅ confirmed.
 
-Each assumption has a dedicated test in the live suite below.
+Each has a dedicated test in the live suite below.
 
 ## Development
 

@@ -74,7 +74,7 @@ describe("exec_in_container", () => {
     });
     expect(textOf(res)).toBe("hi");
     expect(runner.calls[0]).toEqual(["inspect", "abc"]);
-    expect(runner.calls[1]).toEqual(["exec", "abc", "--", "echo", "hi"]);
+    expect(runner.calls[1]).toEqual(["exec", "abc", "echo", "hi"]);
   });
 
   test("blocked in read-only mode", async () => {
@@ -95,7 +95,7 @@ describe("exec_in_container", () => {
     expect(textOf(res)).toBe("hello");
     expect(res.structuredContent).toEqual({ exitCode: 0, stdout: "hello\n", stderr: "note\n" });
     expect(runner.calls[0]).toEqual(["inspect", "abc"]);
-    expect(runner.calls[1]).toEqual(["exec", "abc", "--", "echo", "hello"]);
+    expect(runner.calls[1]).toEqual(["exec", "abc", "echo", "hello"]);
   });
 
   test("exec surfaces non-zero exit as structured failure", async () => {
