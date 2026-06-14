@@ -38,7 +38,10 @@ describe("createServer", () => {
     const runner = makeFakeRunner([{ stdout: '[{"id":"e2e"}]', stderr: "" }]);
     const client = await connect(createServer({ run: runner.run, config: makeConfig() }));
     const res: any = await client.callTool({ name: "list_containers", arguments: {} });
-    expect(res.content[0].text).toBe('[{"id":"e2e"}]');
+    // Output is normalized to the flat contract schema (see src/tools/normalize.ts).
+    expect(JSON.parse(res.content[0].text)).toEqual([
+      { id: "e2e", image: "", status: "", created_at: null, labels: {}, mounts: [] },
+    ]);
   });
 
   test("accepts sessionId and getClient overrides and still registers 15 tools", async () => {

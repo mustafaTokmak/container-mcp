@@ -1,10 +1,18 @@
 # Tool output contract (and a known break to fix on macOS 26)
 
-**Status:** ⚠️ Known issue — `list_containers`, `inspect_container`, and
-`container_stats` currently emit **raw Apple `container` CLI JSON**, which does
-not match the flat schema consumers expect. Found 2026-06-14 by a cross-repo
-contract verification against the `container-mission-control` GUI. Real mode has
-never run on macOS 26, so this has not surfaced at runtime yet.
+**Status:** ✅ Normalizer **implemented** — `src/tools/normalize.ts`, applied in
+`list_containers` / `inspect_container` / `container_stats`, covered by
+`test/normalize.test.ts` (15 tests). ⚠️ But the candidate field paths it tries are
+still **best-effort**: the exact Apple CLI shape is undocumented, so they must be
+CONFIRMED against real `container` output on macOS 26 (one confirmed anchor today:
+`configuration.labels`, from the server's own `ensureManaged` + the `MANAGED_INSPECT`
+fixture). Found 2026-06-14 by a cross-repo contract verification against the
+`container-mission-control` GUI; real mode has not run on hardware yet.
+
+The original break was: these three tools emitted **raw Apple `container` CLI JSON**
+(`return ok(res.stdout.trim())`), which the GUI's flat decoders silently turned into
+empty/default values. The normalizer now lifts the `configuration` wrapper to the
+flat schema below before returning.
 
 ## The problem
 
@@ -55,7 +63,10 @@ Normalize inside the server so every consumer gets this regardless of CLI drift:
 `container_logs`, `stop_container`, `remove_container`, `system_status`, and
 `run_container` already match their consumers — do not change them.
 
-## Fix plan (do on macOS 26, where you can see real CLI output)
+## Remaining work (on macOS 26, where you can see real CLI output)
+
+The normalizer and its behavior tests are written (steps 2 & 4 below, against
+representative shapes). What's left needs real hardware to confirm the inferred paths:
 
 1. Run the real CLI and capture ground truth:
    - `container ls --all --format json`

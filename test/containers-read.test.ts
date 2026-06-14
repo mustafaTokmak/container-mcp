@@ -23,7 +23,10 @@ describe("list_containers", () => {
   test("lists running containers as JSON", async () => {
     const { runner, client } = await setup([{ stdout: '[{"id":"abc"}]', stderr: "" }]);
     const res = await client.callTool({ name: "list_containers", arguments: {} });
-    expect(textOf(res)).toBe('[{"id":"abc"}]');
+    // Output is normalized to the flat contract schema (see src/tools/normalize.ts).
+    expect(JSON.parse(textOf(res))).toEqual([
+      { id: "abc", image: "", status: "", created_at: null, labels: {}, mounts: [] },
+    ]);
     expect(runner.calls[0]).toEqual(["list", "--format", "json"]);
   });
 

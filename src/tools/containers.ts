@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ok, fail, okStructured, failStructured, type ToolContext } from "./util.js";
+import { normalizeContainerList, normalizeInspect, normalizeStats } from "./normalize.js";
 import { assertSafeCliValue, ensureWritable, validateHostPath, validateExistingHostPath, SafetyError } from "../safety.js";
 import { CliError } from "../cli.js";
 import { MANAGED_LABEL, AGENT_LABEL_KEY } from "../config.js";
@@ -56,7 +57,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const args = ["list", "--format", "json"];
         if (all) args.push("--all");
         const res = await ctx.run(args);
-        return ok(res.stdout.trim() || "[]");
+        return ok(JSON.stringify(normalizeContainerList(res.stdout.trim() || "[]")));
       } catch (err) {
         return fail(err);
       }
@@ -294,7 +295,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const safeId = assertSafeCliValue(id, "container id");
         await ensureManaged(ctx, safeId);
         const res = await ctx.run(["stats", "--no-stream", "--format", "json", safeId]);
-        return ok(res.stdout.trim() || "{}");
+        return ok(JSON.stringify(normalizeStats(res.stdout.trim() || "{}")));
       } catch (err) {
         return fail(err);
       }
@@ -314,7 +315,7 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
         const safeId = assertSafeCliValue(id, "container id");
         await ensureManaged(ctx, safeId);
         const res = await ctx.run(["inspect", safeId]);
-        return ok(res.stdout.trim() || "{}");
+        return ok(JSON.stringify(normalizeInspect(res.stdout.trim() || "{}")));
       } catch (err) {
         return fail(err);
       }

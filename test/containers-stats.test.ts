@@ -26,7 +26,8 @@ describe("container_stats", () => {
       { stdout: '{"cpu":"5%"}', stderr: "" },
     ]);
     const res = await client.callTool({ name: "container_stats", arguments: { id: "abc" } });
-    expect(textOf(res)).toBe('{"cpu":"5%"}');
+    // Normalized to the flat stats contract (cpu_percent / mem_used_mb / mem_limit_mb).
+    expect(JSON.parse(textOf(res))).toEqual({ cpu_percent: 5, mem_used_mb: 0, mem_limit_mb: 0 });
     expect(runner.calls[0]).toEqual(["inspect", "abc"]);
     expect(runner.calls[1]).toEqual(["stats", "--no-stream", "--format", "json", "abc"]);
   });
@@ -54,7 +55,10 @@ describe("inspect_container", () => {
       { stdout: '{"status":"running"}', stderr: "" },
     ]);
     const res = await client.callTool({ name: "inspect_container", arguments: { id: "abc" } });
-    expect(textOf(res)).toBe('{"status":"running"}');
+    // Normalized to the flat contract schema (see src/tools/normalize.ts).
+    expect(JSON.parse(textOf(res))).toEqual({
+      id: "", image: "", status: "running", created_at: null, labels: {}, mounts: [],
+    });
     // calls[0] is the ensureManaged inspect, calls[1] is the actual inspect_container inspect
     expect(runner.calls[0]).toEqual(["inspect", "abc"]);
     expect(runner.calls[1]).toEqual(["inspect", "abc"]);
