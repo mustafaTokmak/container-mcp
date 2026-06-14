@@ -12,6 +12,9 @@ const cfg: Config = {
   defaultMemory: "2g",
   agentName: "agent",
   scratchDir: "/tmp",
+  maxContainers: 10,
+  allowUnmanaged: false,
+  allowNetwork: false,
 };
 
 describe("validateHostPath", () => {

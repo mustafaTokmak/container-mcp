@@ -52,6 +52,7 @@ describe.runIf(LIVE)("live: full lifecycle against the real CLI", () => {
       agentName: "live-test",
       maxContainers: 25,
       allowUnmanaged: false,
+      allowNetwork: false,
     };
     client = await connect(createServer({ config }));
     const status: any = await client.callTool({
