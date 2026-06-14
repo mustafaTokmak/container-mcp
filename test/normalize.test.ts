@@ -81,6 +81,42 @@ describe("normalizeContainer", () => {
     const n = normalizeContainer({ configuration: { command: ["node", "x.js"] } });
     expect(n.command).toEqual(["node", "x.js"]);
   });
+
+  test("real Apple container shape (macOS 26 / container 1.0.0)", () => {
+    // Captured from a live `container ls --format json` on macOS 26.5.1.
+    const real = {
+      configuration: {
+        creationDate: "2026-06-14T04:05:40Z",
+        id: "quayprobe",
+        image: {
+          descriptor: { digest: "sha256:a2d4", mediaType: "application/vnd.oci.image.index.v1+json", size: 9218 },
+          reference: "docker.io/library/alpine:latest",
+        },
+        initProcess: { arguments: ["300"], executable: "sleep", environment: ["PATH=/bin"] },
+        labels: {
+          "dev.container-mcp.session": "probe-1",
+          "dev.container-mcp.client": "Probe",
+          "dev.container-mcp.managed": "true",
+        },
+        mounts: [],
+        resources: { cpus: 4, memoryInBytes: 1073741824 },
+      },
+      id: "quayprobe",
+      status: { state: "running", startedDate: "2026-06-14T04:05:42Z", networks: [] },
+    };
+    const n = normalizeContainer(real);
+    expect(n.id).toBe("quayprobe");
+    expect(n.image).toBe("docker.io/library/alpine:latest"); // configuration.image.reference
+    expect(n.status).toBe("running"); // status.state
+    expect(n.created_at).toBe("2026-06-14T04:05:40Z"); // configuration.creationDate
+    expect(n.command).toEqual(["sleep", "300"]); // configuration.initProcess.{executable,arguments}
+    expect(n.labels).toEqual({
+      "dev.container-mcp.session": "probe-1",
+      "dev.container-mcp.client": "Probe",
+      "dev.container-mcp.managed": "true",
+    });
+    expect(n.mounts).toEqual([]);
+  });
 });
 
 describe("normalizeContainerList / normalizeInspect", () => {
@@ -98,18 +134,35 @@ describe("normalizeContainerList / normalizeInspect", () => {
 });
 
 describe("normalizeStats", () => {
-  test("percent string + MB keys", () => {
+  test("real Apple container stats shape (bytes + cumulative usec)", () => {
+    // Captured from `container stats --no-stream --format json` on macOS 26.5.1.
+    const real = JSON.stringify([
+      {
+        blockReadBytes: 1744896,
+        blockWriteBytes: 0,
+        cpuUsageUsec: 3259,
+        id: "quayprobe",
+        memoryLimitBytes: 1073741824,
+        memoryUsageBytes: 2007040,
+        networkRxBytes: 41256,
+        networkTxBytes: 602,
+        numProcesses: 1,
+      },
+    ]);
+    expect(normalizeStats(real)).toEqual({
+      cpu_percent: 0, // Apple emits cumulative usec, not an instantaneous percent
+      cpu_usage_usec: 3259,
+      mem_used_mb: 2007040 / (1024 * 1024),
+      mem_limit_mb: 1024, // 1073741824 bytes
+    });
+  });
+  test("percent string + MB keys (Docker-ish fallback)", () => {
     expect(
       normalizeStats(JSON.stringify({ cpu: "5%", mem_used_mb: 128, mem_limit_mb: 512 }))
-    ).toEqual({ cpu_percent: 5, mem_used_mb: 128, mem_limit_mb: 512 });
-  });
-  test("bytes fields convert to MB", () => {
-    expect(
-      normalizeStats(JSON.stringify({ cpu_percent: 12.5, mem_used_bytes: 1048576, mem_limit_bytes: 2097152 }))
-    ).toEqual({ cpu_percent: 12.5, mem_used_mb: 1, mem_limit_mb: 2 });
+    ).toEqual({ cpu_percent: 5, cpu_usage_usec: 0, mem_used_mb: 128, mem_limit_mb: 512 });
   });
   test("unrecognized / empty / malformed -> zeros, never throws", () => {
-    expect(normalizeStats("{}")).toEqual({ cpu_percent: 0, mem_used_mb: 0, mem_limit_mb: 0 });
-    expect(normalizeStats("not json")).toEqual({ cpu_percent: 0, mem_used_mb: 0, mem_limit_mb: 0 });
+    expect(normalizeStats("{}")).toEqual({ cpu_percent: 0, cpu_usage_usec: 0, mem_used_mb: 0, mem_limit_mb: 0 });
+    expect(normalizeStats("not json")).toEqual({ cpu_percent: 0, cpu_usage_usec: 0, mem_used_mb: 0, mem_limit_mb: 0 });
   });
 });

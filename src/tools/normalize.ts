@@ -31,6 +31,7 @@ export interface NormalizedContainer {
 
 export interface NormalizedStats {
   cpu_percent: number;
+  cpu_usage_usec: number;
   mem_used_mb: number;
   mem_limit_mb: number;
 }
@@ -81,15 +82,38 @@ function extractImage(node: any): string {
 }
 
 function extractStatus(node: any): string {
+  // Apple container 1.0.0: runtime state is `status.state` (an object: {state,startedDate,...}).
   const s = node?.status ?? node?.state ?? node?.configuration?.status;
   if (typeof s === "string") return s;
-  return str(s?.status ?? s?.state);
+  return str(s?.state ?? s?.status);
 }
 
 function extractCreatedAt(node: any): string | null {
   const c =
-    node?.created_at ?? node?.createdAt ?? node?.configuration?.created_at ?? node?.configuration?.createdAt;
+    node?.configuration?.creationDate ?? // confirmed real Apple field (container 1.0.0)
+    node?.created_at ??
+    node?.createdAt ??
+    node?.configuration?.created_at ??
+    node?.configuration?.createdAt ??
+    node?.status?.startedDate;
   return typeof c === "string" ? c : null;
+}
+
+function extractCommand(node: any): string[] | undefined {
+  // Apple container 1.0.0: configuration.initProcess.{executable, arguments}.
+  const ip = node?.configuration?.initProcess;
+  if (ip && typeof ip === "object") {
+    const exe = typeof ip.executable === "string" && ip.executable.length > 0 ? [ip.executable] : [];
+    const args = Array.isArray(ip.arguments) ? ip.arguments.map(str).filter((s: string) => s.length > 0) : [];
+    const cmd = [...exe, ...args];
+    if (cmd.length > 0) return cmd;
+  }
+  const fallback = node?.command ?? node?.configuration?.command ?? node?.configuration?.process?.args;
+  if (Array.isArray(fallback)) {
+    const m = fallback.map(str).filter((s: string) => s.length > 0);
+    if (m.length > 0) return m;
+  }
+  return undefined;
 }
 
 function extractMounts(node: any): NormalizedMount[] {
@@ -107,8 +131,8 @@ export function normalizeContainer(node: any): NormalizedContainer {
     labels: normalizeLabels(node?.configuration?.labels ?? node?.labels),
     mounts: extractMounts(node),
   };
-  const cmd = node?.command ?? node?.configuration?.command ?? node?.configuration?.process?.args;
-  if (Array.isArray(cmd)) out.command = cmd.map(str).filter((s) => s.length > 0);
+  const command = extractCommand(node);
+  if (command) out.command = command;
   return out;
 }
 
@@ -136,22 +160,26 @@ export function normalizeStats(stdout: string): NormalizedStats {
   }
   if (Array.isArray(raw)) raw = raw[0] ?? {};
 
-  const bytesToMb = (v: unknown) => (typeof v === "number" ? v / (1024 * 1024) : num(v));
+  const bytesToMb = (v: unknown) => num(v) / (1024 * 1024);
+
+  // Apple container 1.0.0 stats: memoryUsageBytes / memoryLimitBytes / cpuUsageUsec (confirmed).
+  const usedBytes = raw.memoryUsageBytes ?? raw.mem_used_bytes;
+  const limitBytes = raw.memoryLimitBytes ?? raw.mem_limit_bytes;
   const usedMb =
-    raw.mem_used_mb ??
-    raw.memory_usage_mb ??
-    (raw.mem_used_bytes !== undefined ? bytesToMb(raw.mem_used_bytes) : undefined) ??
-    raw.MemUsage ??
-    raw.memory_usage;
+    usedBytes !== undefined
+      ? bytesToMb(usedBytes)
+      : raw.mem_used_mb ?? raw.memory_usage_mb ?? raw.MemUsage ?? raw.memory_usage;
   const limitMb =
-    raw.mem_limit_mb ??
-    raw.memory_limit_mb ??
-    (raw.mem_limit_bytes !== undefined ? bytesToMb(raw.mem_limit_bytes) : undefined) ??
-    raw.MemLimit ??
-    raw.memory_limit;
+    limitBytes !== undefined
+      ? bytesToMb(limitBytes)
+      : raw.mem_limit_mb ?? raw.memory_limit_mb ?? raw.MemLimit ?? raw.memory_limit;
 
   return {
+    // Apple exposes cumulative CPU time (cpuUsageUsec), NOT an instantaneous percent.
+    // A real % needs two samples over time; consumers can derive it from cpu_usage_usec
+    // deltas. cpu_percent stays best-effort (0 unless a pre-computed % key is present).
     cpu_percent: num(raw.cpu_percent ?? raw.cpuPercent ?? raw.CPUPerc ?? raw.cpu),
+    cpu_usage_usec: num(raw.cpuUsageUsec ?? raw.cpu_usage_usec),
     mem_used_mb: num(usedMb),
     mem_limit_mb: num(limitMb),
   };

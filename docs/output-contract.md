@@ -1,18 +1,38 @@
 # Tool output contract (and a known break to fix on macOS 26)
 
-**Status:** ✅ Normalizer **implemented** — `src/tools/normalize.ts`, applied in
-`list_containers` / `inspect_container` / `container_stats`, covered by
-`test/normalize.test.ts` (15 tests). ⚠️ But the candidate field paths it tries are
-still **best-effort**: the exact Apple CLI shape is undocumented, so they must be
-CONFIRMED against real `container` output on macOS 26 (one confirmed anchor today:
-`configuration.labels`, from the server's own `ensureManaged` + the `MANAGED_INSPECT`
-fixture). Found 2026-06-14 by a cross-repo contract verification against the
-`container-mission-control` GUI; real mode has not run on hardware yet.
+**Status:** ✅ Normalizer implemented **and verified against the real CLI** —
+captured live `container ls` / `inspect` / `stats` JSON on macOS 26.5.1 /
+container 1.0.0 (2026-06-14) and corrected the field paths to ground truth.
+`src/tools/normalize.ts`, applied in `list_containers` / `inspect_container` /
+`container_stats`, covered by `test/normalize.test.ts` (incl. tests built from the
+captured real shapes).
 
-The original break was: these three tools emitted **raw Apple `container` CLI JSON**
+**Confirmed real field paths (container 1.0.0):**
+
+| Flat field | Real Apple path |
+|---|---|
+| `id` | top-level `id` |
+| `image` | `configuration.image.reference` |
+| `status` | `status.state` — the top-level `status` is an **object** `{state,startedDate,…}` |
+| `created_at` | `configuration.creationDate` |
+| `command` | `configuration.initProcess.{executable, arguments}` |
+| `labels` | `configuration.labels` (a map) |
+| `mounts` | `configuration.mounts` (location confirmed; element field-names still defensive — the probe had no mounts) |
+| stats mem | `memoryUsageBytes` / `memoryLimitBytes` (bytes → MB) |
+| stats cpu | `cpuUsageUsec` (cumulative µs — **not** a %; passed through as `cpu_usage_usec`) |
+
+The original break: these three tools emitted **raw Apple CLI JSON**
 (`return ok(res.stdout.trim())`), which the GUI's flat decoders silently turned into
 empty/default values. The normalizer now lifts the `configuration` wrapper to the
-flat schema below before returning.
+flat schema below.
+
+**Two consumer-side follow-ups surfaced by the live run:**
+1. A **stopped** container's `status.state` is the string `"stopped"` — the GUI's
+   `ContainerStatusKind` only recognizes `"running"` / `"exited (N)"` / `"building"`,
+   so `"stopped"` falls through to `.unknown`. The GUI must learn `"stopped"`.
+2. Apple has no instantaneous CPU %. For a live CPU sparkline the GUI must compute a
+   delta from consecutive `cpu_usage_usec` samples (it polls every 1.5s); memory works
+   directly from `mem_used_mb` / `mem_limit_mb`.
 
 ## The problem
 
@@ -63,10 +83,19 @@ Normalize inside the server so every consumer gets this regardless of CLI drift:
 `container_logs`, `stop_container`, `remove_container`, `system_status`, and
 `run_container` already match their consumers — do not change them.
 
-## Remaining work (on macOS 26, where you can see real CLI output)
+## Remaining work
 
-The normalizer and its behavior tests are written (steps 2 & 4 below, against
-representative shapes). What's left needs real hardware to confirm the inferred paths:
+The capture + correction is **done** (paths confirmed above; tests built from the
+real shapes). What's left is small:
+
+- **Mount element field-names** — the probe container had no mounts, so the
+  `{source,destination,read_only}` keys inside `configuration.mounts[]` are still
+  defensive. Run `container run -v <host>:<guest> …`, inspect it, confirm + tighten.
+- **GUI: handle `"stopped"`** in `ContainerStatusKind` (consumer follow-up #1 above).
+- **GUI: CPU% from `cpu_usage_usec` deltas** (consumer follow-up #2 above).
+- Re-run the GUI's real (`mcp`) engine end-to-end against a live container.
+
+Reference — the original capture/confirm procedure:
 
 1. Run the real CLI and capture ground truth:
    - `container ls --all --format json`

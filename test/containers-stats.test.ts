@@ -26,8 +26,8 @@ describe("container_stats", () => {
       { stdout: '{"cpu":"5%"}', stderr: "" },
     ]);
     const res = await client.callTool({ name: "container_stats", arguments: { id: "abc" } });
-    // Normalized to the flat stats contract (cpu_percent / mem_used_mb / mem_limit_mb).
-    expect(JSON.parse(textOf(res))).toEqual({ cpu_percent: 5, mem_used_mb: 0, mem_limit_mb: 0 });
+    // Normalized to the flat stats contract.
+    expect(JSON.parse(textOf(res))).toEqual({ cpu_percent: 5, cpu_usage_usec: 0, mem_used_mb: 0, mem_limit_mb: 0 });
     expect(runner.calls[0]).toEqual(["inspect", "abc"]);
     expect(runner.calls[1]).toEqual(["stats", "--no-stream", "--format", "json", "abc"]);
   });
