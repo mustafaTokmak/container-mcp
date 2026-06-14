@@ -1,0 +1,76 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mustafatokmak/container-mcp",
+  "description": "MCP server for Apple containers — run AI agents in VM-isolated sandboxes on your Mac. Every container is its own VM; network is denied and mounts are allowlisted by default.",
+  "repository": {
+    "url": "https://github.com/mustafaTokmak/container-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "container-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CONTAINER_MCP_ALLOWED_MOUNTS",
+          "description": "Colon-separated allowlist of host paths agents may mount, copy to/from, or build from. Default: the launch directory plus a private per-process scratch dir. Setting it replaces the default.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_READONLY",
+          "description": "Set to 1/true to allow only listing, logs, and status — all mutating tools are disabled. Default: off.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_ALLOW_NETWORK",
+          "description": "Set to 1/true to allow containers outbound network access. Default: off (containers run with --network none).",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_DEFAULT_CPUS",
+          "description": "CPU limit applied when the agent does not specify one. Default: 2.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_DEFAULT_MEMORY",
+          "description": "Memory limit applied when the agent does not specify one. Default: 2g.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_MAX_CONTAINERS",
+          "description": "Maximum concurrent containers run_container will create. Default: 10.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_AGENT_NAME",
+          "description": "Value of the dev.container-mcp.agent label stamped on created containers. Default: agent.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_TIMEOUT_MS",
+          "description": "Base CLI timeout in milliseconds. Image pulls/builds and wait-mode runs get 600000 automatically. Default: 120000.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "CONTAINER_MCP_ALLOW_UNMANAGED",
+          "description": "Set to 1/true to allow lifecycle operations on containers not created by this server. Default: off (fail-closed managed-label scoping).",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
