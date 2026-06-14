@@ -73,6 +73,18 @@ describe("normalizeContainer", () => {
     expect(n.mounts).toEqual([{ source: "/h", destination: "/g", read_only: true }]);
   });
 
+  test("real Apple mount shape — options[] carries read-only (macOS 26)", () => {
+    // Captured from `container inspect` for `-v /tmp:/data` and `-v /tmp:/data:ro`.
+    const rw = normalizeContainer({
+      configuration: { mounts: [{ destination: "/data", options: [], source: "/tmp", type: { virtiofs: {} } }] },
+    });
+    expect(rw.mounts).toEqual([{ source: "/tmp", destination: "/data", read_only: false }]);
+    const ro = normalizeContainer({
+      configuration: { mounts: [{ destination: "/data", options: ["ro"], source: "/tmp", type: { virtiofs: {} } }] },
+    });
+    expect(ro.mounts).toEqual([{ source: "/tmp", destination: "/data", read_only: true }]);
+  });
+
   test("image as a plain string", () => {
     expect(normalizeContainer({ configuration: { image: "alpine:3.20" } }).image).toBe("alpine:3.20");
   });

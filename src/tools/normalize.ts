@@ -66,12 +66,16 @@ export function normalizeLabels(raw: unknown): Record<string, string> {
 }
 
 export function normalizeMount(m: any): NormalizedMount {
+  // Apple container 1.0.0: { source, destination, options:[…], type:{virtiofs:{}} }.
+  // Read-only is expressed as "ro" in the options array (confirmed on macOS 26).
+  const opts: string[] = Array.isArray(m?.options) ? m.options.map(str) : [];
+  const roFromOptions = opts.some((o) => o === "ro" || o === "readonly" || o === "read-only");
   return {
     source: str(m?.source ?? m?.Source ?? m?.host ?? m?.hostPath ?? m?.host_path),
     destination: str(
       m?.destination ?? m?.Destination ?? m?.target ?? m?.guest ?? m?.containerPath ?? m?.container_path
     ),
-    read_only: Boolean(m?.read_only ?? m?.readOnly ?? m?.readonly ?? m?.ro ?? false),
+    read_only: Boolean(m?.read_only ?? m?.readOnly ?? m?.readonly ?? m?.ro ?? roFromOptions),
   };
 }
 

@@ -17,7 +17,7 @@ captured real shapes).
 | `created_at` | `configuration.creationDate` |
 | `command` | `configuration.initProcess.{executable, arguments}` |
 | `labels` | `configuration.labels` (a map) |
-| `mounts` | `configuration.mounts` (location confirmed; element field-names still defensive — the probe had no mounts) |
+| `mounts` | `configuration.mounts[]` = `{source, destination, options[]}`; read-only is `"ro"` in `options` |
 | stats mem | `memoryUsageBytes` / `memoryLimitBytes` (bytes → MB) |
 | stats cpu | `cpuUsageUsec` (cumulative µs — **not** a %; passed through as `cpu_usage_usec`) |
 
@@ -88,12 +88,12 @@ Normalize inside the server so every consumer gets this regardless of CLI drift:
 The capture + correction is **done** (paths confirmed above; tests built from the
 real shapes). What's left is small:
 
-- **Mount element field-names** — the probe container had no mounts, so the
-  `{source,destination,read_only}` keys inside `configuration.mounts[]` are still
-  defensive. Run `container run -v <host>:<guest> …`, inspect it, confirm + tighten.
-- **GUI: handle `"stopped"`** in `ContainerStatusKind` (consumer follow-up #1 above).
-- **GUI: CPU% from `cpu_usage_usec` deltas** (consumer follow-up #2 above).
-- Re-run the GUI's real (`mcp`) engine end-to-end against a live container.
+- ~~Mount element field-names~~ — **confirmed** on macOS 26: `configuration.mounts[]`
+  = `{source, destination, options[]}`, read-only is `"ro"` in `options`.
+- ~~GUI: handle `"stopped"`~~ — **done**: the GUI's `ContainerStatusKind` now maps
+  `stopped`/`dead`/`removed` → exited.
+- **GUI: CPU% from `cpu_usage_usec` deltas** (consumer follow-up #2 above) — still open.
+- Re-run the GUI's real (`mcp`) engine end-to-end against a live container — still open.
 
 Reference — the original capture/confirm procedure:
 
