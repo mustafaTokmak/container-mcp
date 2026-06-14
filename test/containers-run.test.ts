@@ -51,6 +51,8 @@ describe("run_container", () => {
       "dev.container-mcp.session=test-session",
       "--label",
       "dev.container-mcp.client=test-client",
+      "--label",
+      "dev.container-mcp.network=denied",
       "alpine:latest",
     ]);
   });
@@ -309,6 +311,17 @@ describe("run_container", () => {
       const netIdx = args.indexOf("--network");
       // --network none must not appear; no --network flag at all is the allowed state
       expect(netIdx === -1 || args[netIdx + 1] !== "none").toBe(true);
+      // and the network posture label reflects the decision for the GUI boundary bar
+      expect(args).toContain("dev.container-mcp.network=allowed");
+    });
+
+    test("stamps network=denied label by default for the GUI boundary", async () => {
+      const { runner, client } = await setup([
+        { stdout: "[]", stderr: "" },
+        { stdout: "abc123\n", stderr: "" },
+      ]);
+      await client.callTool({ name: "run_container", arguments: { image: "alpine" } });
+      expect(runner.calls[1]).toContain("dev.container-mcp.network=denied");
     });
 
     test("allows network when CONTAINER_MCP_ALLOW_NETWORK config is set", async () => {

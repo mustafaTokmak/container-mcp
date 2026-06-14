@@ -170,6 +170,8 @@ export function registerContainerTools(server: McpServer, ctx: ToolContext): voi
           `dev.container-mcp.session=${ctx.sessionId}`,
           "--label",
           `dev.container-mcp.client=${safeClient}`,
+          "--label",
+          `dev.container-mcp.network=${networkAllowed ? "allowed" : "denied"}`,
         );
         if (workdir) args.push("--workdir", assertSafeCliValue(workdir, "workdir"));
         if (name) args.push("--name", assertSafeCliValue(name, "container name"));
