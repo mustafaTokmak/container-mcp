@@ -12,6 +12,19 @@ an AI agent wrote five seconds ago. No daemon, no account, no cloud.
 > Part of a larger toolkit: a native macOS "mission control" GUI for agent
 > sandboxes is in development.
 
+> [!IMPORTANT]
+> **Requirements — read before installing.** This server shells out to Apple's
+> `container` CLI, which only runs on **Apple silicon Macs (M-series) on macOS 26
+> or newer**. There is no Linux, Intel, or pre-26 fallback — the server will
+> install but every tool call fails without a working `container` CLI.
+>
+> - Apple silicon Mac (arm64)
+> - macOS 26 (Tahoe) or newer
+> - [Apple `container` CLI](https://github.com/apple/container/releases) installed and on `PATH`
+> - Node.js 20+
+>
+> Verify the CLI is present before going further: `container --version`
+
 ## Why
 
 - **Real VM isolation, per container** — each sandbox gets its own kernel via
@@ -28,10 +41,24 @@ an AI agent wrote five seconds ago. No daemon, no account, no cloud.
 
 ## Install
 
-Requires an Apple silicon Mac, macOS 26 or newer, and the
-[container CLI](https://github.com/apple/container/releases).
+Meets the requirements above? Install with one command (no clone, no build):
 
-Until the npm package is published, install from source:
+```bash
+claude mcp add container -- npx -y container-mcp
+```
+
+Or point any MCP client's config at the published binary:
+
+```json
+{
+  "mcpServers": {
+    "container": { "command": "npx", "args": ["-y", "container-mcp"] }
+  }
+}
+```
+
+<details>
+<summary>Install from source (for development or pre-release builds)</summary>
 
 ```bash
 git clone https://github.com/mustafaTokmak/container-mcp.git
@@ -40,17 +67,42 @@ npm install && npm run build
 claude mcp add container -- node "$(pwd)/dist/index.js"
 ```
 
-Or in any MCP client config (point `command`/`args` at the built entry point):
+</details>
 
-```json
-{
-  "mcpServers": {
-    "container": { "command": "node", "args": ["/absolute/path/to/container-mcp/dist/index.js"] }
-  }
-}
+## Verify it works
+
+After adding the server, confirm the toolchain end-to-end by asking your agent to
+check (and start) the container system service:
+
+```
+Use the system_status tool with start: true.
 ```
 
-Once published to npm, this becomes `claude mcp add container -- npx -y container-mcp`.
+A healthy setup returns `running` (or `container system service started` on first
+start). An error here means the `container` CLI isn't installed or you're not on
+macOS 26+ — fix that before trying other tools.
+
+## Try it — the aha moment
+
+Ask your agent to run untrusted code in a throwaway VM and hand back the output —
+no daemon, no cloud, network denied by default:
+
+```
+Run python:3.12-alpine in a container with wait: true and
+command ["python", "-c", "print(sum(range(1000)))"]. Show me the output.
+```
+
+The agent calls `run_container` with `wait: true`, the code executes inside its
+own VM with no network access, and you get back a structured result:
+
+```
+499500
+```
+
+That container had its own kernel, couldn't reach the network, and is gone when
+you remove it (`remove_container`) — the right blast radius for code an agent
+wrote five seconds ago. Want it to reach the network? Add `network: true` to the
+same request.
 
 ## Tools
 

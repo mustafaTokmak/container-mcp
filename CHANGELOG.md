@@ -4,6 +4,39 @@ All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-14
+
+First release published to npm. Install with `npx -y container-mcp` /
+`claude mcp add container -- npx -y container-mcp`.
+
+### Added
+
+- Every created container is now stamped with a
+  `dev.container-mcp.network=allowed|denied` label reflecting its egress posture,
+  so a GUI (Mission Control's boundary bar) can show per-session network state
+  truthfully.
+- Published to the npm registry as `container-mcp` (first public release).
+- GitHub Actions release workflow that publishes on `v*` tag push with npm
+  provenance (`npm publish --access public --provenance`).
+- `tsconfig.test.json` and a `typecheck` npm script that type-check both `src`
+  and `test`; CI now runs `npm run typecheck` so test/source type drift fails
+  the build.
+
+### Changed
+
+- README: hoisted the Apple-silicon + macOS-26 + `container` CLI requirements
+  into a prominent callout at the top, switched the Install section to the
+  published `npx -y container-mcp` one-liner (from-source demoted to a
+  collapsible block), and added "Verify it works" (system_status smoke test)
+  and "Try it" (a worked run_container example) sections.
+
+### Fixed
+
+- Test suite type-checks cleanly under `tsc` (test-only typing fix; no change
+  to shipped behavior).
+
+[0.2.0]: https://github.com/mustafaTokmak/container-mcp/compare/v0.1.2...v0.2.0
+
 ## [0.1.2] - 2026-06-13
 
 Engine round: network egress control, attribution labels, structured results,
